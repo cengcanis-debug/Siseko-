@@ -95,6 +95,12 @@ export interface InvoiceRecord {
   buyerAddress?: string;
   buyerVatNumber?: string;
   hasFullTaxInvoiceFields?: boolean;
+  // Petrol / Fuel station geospatial pinning fields
+  isPetrolInvoice?: boolean;
+  stationName?: string;
+  stationLatitude?: number;
+  stationLongitude?: number;
+  litresPurchased?: number;
 }
 
 export interface BankAccount {
@@ -179,6 +185,20 @@ export interface TeamMember {
   joinedAt?: string;
 }
 
+export interface AppSession {
+  token: string; // 64-character cryptographically secure hex string (secrets.token_hex(32))
+  role: RoleType;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  ipAddress: string;
+  createdAt: string;
+  expiresAt: string;
+  lastActiveAt: string;
+  status: 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+  scopes: string[];
+}
+
 export interface AuditLogEntry {
   id: string;
   timestamp: string;
@@ -189,6 +209,7 @@ export interface AuditLogEntry {
   action: string;
   details: string;
   ipAddress?: string;
+  sessionTokenMasked?: string;
 }
 
 export interface EntityProfile {

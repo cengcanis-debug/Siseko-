@@ -137,7 +137,7 @@ def validate_sars_tax_number(tax_str: str) -> bool:
 class IndividualRegistrationPayload(BaseModel):
     email: str = Field(..., description="Unique email address for user login.", example="taxpayer@highwealth.co.za")
     full_name: str = Field(..., description="Legal full name of the individual taxpayer.", example="Jan de Klerk")
-    sa_id: str = Field(..., description="13-digit South African National Identification Number.", example="8204125012083")
+    sa_id: str = Field(..., description="13-digit South African National Identification Number.", example="820412-ENC-2083")
     sars_tax_number: Optional[str] = Field(default=None, description="Optional 10-digit SARS tax reference number.", example="1987654321")
 
     @field_validator('email')

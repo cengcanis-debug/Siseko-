@@ -1,0 +1,8 @@
+{
+  "reachable": false,
+  "latency": 2503,
+  "endpoint": "sars-edi-gateway.govtech.internal",
+  "port": 1364,
+  "status": "UNREACHABLE_WITHOUT_SITA_VPN",
+  "remediation": "SITA MPLS/Connect:Direct VPN required - not public internet"
+}

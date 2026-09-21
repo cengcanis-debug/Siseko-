@@ -3,6 +3,8 @@ import { TaxTransaction, InvoiceRecord, UserTaxProfile, TaxCycleSnapshot } from 
 export interface TaxRulesConfig {
   vatRate: number; // e.g. 0.15
   primaryRebate: number; // e.g. 17235
+  secondaryRebate: number; // e.g. 9444 (Age 65-74)
+  tertiaryRebate: number; // e.g. 3145 (Age 75+)
   retirementCapPercent: number; // e.g. 0.275
   retirementCapMax: number; // e.g. 350000
   taxBrackets: { limit: number; base: number; rate: number; subtract: number }[];
@@ -12,6 +14,8 @@ export interface TaxRulesConfig {
 export const DEFAULT_TAX_RULES: TaxRulesConfig = {
   vatRate: 0.15,
   primaryRebate: 17235,
+  secondaryRebate: 9444,
+  tertiaryRebate: 3145,
   retirementCapPercent: 0.275,
   retirementCapMax: 350000,
   taxBrackets: [
@@ -27,11 +31,12 @@ export const DEFAULT_TAX_RULES: TaxRulesConfig = {
 };
 
 /**
- * South African Normal Tax Brackets (2025/2026 Tax Year)
- * Primary Rebate: R17,235
- * Secondary Rebate (65+): R9,444
+ * South African Normal Tax Brackets (2026/2027 Fiscal Guidelines)
+ * Primary Rebate: R17,235 (Tax Threshold: R95,750)
+ * Secondary Rebate (65-74): R9,444 (Tax Threshold: R148,217)
+ * Tertiary Rebate (75+): R3,145 (Tax Threshold: R165,689)
  */
-export function calculateSANormalTax(taxableIncome: number, customRules?: TaxRulesConfig): number {
+export function calculateSANormalTax(taxableIncome: number, customRules?: TaxRulesConfig, age: number = 35): number {
   if (taxableIncome <= 0) return 0;
 
   const rules = customRules || DEFAULT_TAX_RULES;
@@ -43,8 +48,17 @@ export function calculateSANormalTax(taxableIncome: number, customRules?: TaxRul
     grossTax = bracket.base + (taxableIncome - bracket.subtract) * bracket.rate;
   }
 
-  // Less standard South African primary rebate
-  const netTax = Math.max(0, grossTax - rules.primaryRebate);
+  // Calculate age-appropriate total rebate
+  let totalRebate = rules.primaryRebate;
+  if (age >= 65) {
+    totalRebate += (rules.secondaryRebate || 9444);
+  }
+  if (age >= 75) {
+    totalRebate += (rules.tertiaryRebate || 3145);
+  }
+
+  // Less standard South African rebates
+  const netTax = Math.max(0, grossTax - totalRebate);
   return Number(netTax.toFixed(2));
 }
 
@@ -196,19 +210,19 @@ export function generateLiveTaxSnapshot(
   if (isCorporateSme) {
     if (profile.isSbcApplied && profile.isSbcNaturalShareholding && profile.isSbcActiveIncome && (profile.sbcGrossIncome || grossIncome) <= 20000000) {
       // Small Business Corporation Progressive Rates
-      // 2025/2026:
-      // R0 – R95,000: 0%
-      // R95,001 – R365,000: 7% of amount > R95,000
-      // R365,001 – R550,000: R18,900 + 21% of amount > R365,000
-      // R550,001+: R57,750 + 27% of amount > R550,000
-      if (netTaxableIncome <= 95000) {
+      // 2026/2027:
+      // R0 – R95,750: 0%
+      // R95,751 – R365,000: 7% of amount > R95,750
+      // R365,001 – R550,000: R18,848 + 21% of amount > R365,000
+      // R550,001+: R57,698 + 27% of amount > R550,000
+      if (netTaxableIncome <= 95750) {
         estimatedNormalTax = 0;
       } else if (netTaxableIncome <= 365000) {
-        estimatedNormalTax = (netTaxableIncome - 95000) * 0.07;
+        estimatedNormalTax = (netTaxableIncome - 95750) * 0.07;
       } else if (netTaxableIncome <= 550000) {
-        estimatedNormalTax = 18900 + (netTaxableIncome - 365000) * 0.21;
+        estimatedNormalTax = 18848 + (netTaxableIncome - 365000) * 0.21;
       } else {
-        estimatedNormalTax = 57750 + (netTaxableIncome - 550000) * 0.27;
+        estimatedNormalTax = 57698 + (netTaxableIncome - 550000) * 0.27;
       }
     } else {
       // Default Corporate Tax (flat 27% standard in South Africa)

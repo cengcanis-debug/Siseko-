@@ -17,6 +17,12 @@ export interface GPSTripInput {
   client_name?: string;
   vehicle_value?: number; // Optional, used for scale-based calculations
   vehicle_registration?: string;
+  // Corroborating Petrol Station / Fuel Invoice Pinning
+  petrol_invoice_id?: string;
+  petrol_station_name?: string;
+  petrol_station_latitude?: number;
+  petrol_station_longitude?: number;
+  petrol_invoice_amount?: number;
 }
 
 export interface GPSTripOutput {
@@ -41,6 +47,15 @@ export interface GPSTripOutput {
   reimbursement_amount: number; // ZAR total reimbursement
   validation_status: 'Compliant' | 'Warning' | 'Disallowed';
   validation_messages: string[];
+  // Pinned Petrol Station Route Corroboration
+  petrol_invoice_id?: string;
+  petrol_station_name?: string;
+  petrol_station_latitude?: number;
+  petrol_station_longitude?: number;
+  petrol_invoice_amount?: number;
+  petrol_pinned?: boolean;
+  station_distance_to_route_km?: number;
+  petrol_reach_status?: 'Within Route Reach' | 'Out of Route Proximity' | 'No Invoice Pinned';
 }
 
 export interface LogbookSummary {
@@ -82,6 +97,37 @@ export function calculateHaversineDistance(
   const distance = R * c;
   
   return Number(distance.toFixed(2)); // Return rounded to 2 decimal places
+}
+
+/**
+ * Calculates the shortest distance (in km) from a petrol station to the claimed travel route.
+ * Tests proximity to start location, end location, and intermediate points along the route segment.
+ */
+export function calculateStationDistanceToRoute(
+  startLat: number,
+  startLon: number,
+  endLat: number,
+  endLon: number,
+  stationLat: number,
+  stationLon: number
+): number {
+  // Distance from station to origin and destination
+  const distToStart = calculateHaversineDistance(stationLat, stationLon, startLat, startLon);
+  const distToEnd = calculateHaversineDistance(stationLat, stationLon, endLat, endLon);
+  
+  // Sample intermediate points along the claimed direct transit corridor (10 steps)
+  let minIntermediateDist = Math.min(distToStart, distToEnd);
+  for (let step = 1; step < 10; step++) {
+    const fraction = step / 10;
+    const interLat = startLat + (endLat - startLat) * fraction;
+    const interLon = startLon + (endLon - startLon) * fraction;
+    const distToInter = calculateHaversineDistance(stationLat, stationLon, interLat, interLon);
+    if (distToInter < minIntermediateDist) {
+      minIntermediateDist = distToInter;
+    }
+  }
+
+  return Number(minIntermediateDist.toFixed(2));
 }
 
 /**
@@ -196,6 +242,35 @@ export function processGPSTracks(
       validationMessages.push('Odometer Error: Closing odometer reading must exceed opening odometer reading.');
     }
 
+    // 3. Petrol Station Proximity & Route Reach Corroboration
+    let petrolPinned = false;
+    let stationDistanceToRouteKm: number | undefined;
+    let petrolReachStatus: 'Within Route Reach' | 'Out of Route Proximity' | 'No Invoice Pinned' = 'No Invoice Pinned';
+
+    if (track.petrol_invoice_id && track.petrol_station_latitude !== undefined && track.petrol_station_longitude !== undefined) {
+      petrolPinned = true;
+      stationDistanceToRouteKm = calculateStationDistanceToRoute(
+        track.start_latitude,
+        track.start_longitude,
+        track.end_latitude,
+        track.end_longitude,
+        track.petrol_station_latitude,
+        track.petrol_station_longitude
+      );
+
+      // SARS Rule: Petrol station must be within 15km of the claimed corridor
+      if (stationDistanceToRouteKm <= 15.0) {
+        petrolReachStatus = 'Within Route Reach';
+        validationMessages.push(`Petrol Invoice Corroborated: Station "${track.petrol_station_name || 'Fuel Station'}" is ${stationDistanceToRouteKm} km from route (Within 15 km SARS corridor).`);
+      } else {
+        petrolReachStatus = 'Out of Route Proximity';
+        if (validationStatus !== 'Disallowed') {
+          validationStatus = 'Warning';
+        }
+        validationMessages.push(`Petrol Geolocation Discrepancy: Station "${track.petrol_station_name || 'Fuel Station'}" is ${stationDistanceToRouteKm} km away from route. Petrol station reference must be within reach of the route claimed.`);
+      }
+    }
+
     if (validationStatus === 'Compliant') {
       compliantTripsCount++;
     }
@@ -235,6 +310,14 @@ export function processGPSTracks(
       reimbursement_amount: reimbursement,
       validation_status: validationStatus,
       validation_messages: validationMessages,
+      petrol_invoice_id: track.petrol_invoice_id,
+      petrol_station_name: track.petrol_station_name,
+      petrol_station_latitude: track.petrol_station_latitude,
+      petrol_station_longitude: track.petrol_station_longitude,
+      petrol_invoice_amount: track.petrol_invoice_amount,
+      petrol_pinned: petrolPinned,
+      station_distance_to_route_km: stationDistanceToRouteKm,
+      petrol_reach_status: petrolReachStatus,
     };
   });
 
@@ -285,6 +368,10 @@ export function generateSARSLogbookCSV(trips: GPSTripOutput[], summary: LogbookS
     'TRIP TAG (Business/Private)',
     'CLIENT/COMPANY VISITED',
     'REASON FOR TRIP (SARS MANDATORY)',
+    'PINNED PETROL INVOICE',
+    'PETROL STATION NAME',
+    'STATION REACH STATUS',
+    'DISTANCE TO ROUTE (km)',
     'REIMBURSEMENT RATE (ZAR/km)',
     'CLAIMABLE AMOUNT (ZAR)',
     'COMPLIANCE STATUS',
@@ -304,6 +391,10 @@ export function generateSARSLogbookCSV(trips: GPSTripOutput[], summary: LogbookS
       `"${trip.tag}"`,
       `"${trip.client_name.replace(/"/g, '""')}"`,
       `"${trip.reason_for_trip.replace(/"/g, '""')}"`,
+      `"${trip.petrol_invoice_id || 'None'}"`,
+      `"${(trip.petrol_station_name || 'N/A').replace(/"/g, '""')}"`,
+      `"${trip.petrol_reach_status || 'No Invoice Pinned'}"`,
+      trip.station_distance_to_route_km !== undefined ? trip.station_distance_to_route_km : 'N/A',
       trip.reimbursement_rate_per_km,
       trip.reimbursement_amount,
       `"${trip.validation_status}"`,
