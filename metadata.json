@@ -1,6 +1,6 @@
 {
-  "name": "South Africa Tax Compliance Advisor",
-  "description": "Mobile-first SARS tax compliance companion with real-time transaction advisor, smart invoice scanner, bank feed tagging, and provisional tax liability calculator.",
+  "name": "ZAtax compliance",
+  "description": "Mobile-first SARS tax compliance companion with real-time transaction advisor, smart invoice scanner, bank feed tagging, and provisional tax liability calculator by Ilitha Fintech Operations.",
   "requestFramePermissions": ["camera", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
