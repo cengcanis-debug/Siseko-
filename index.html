@@ -1,16 +1,158 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ZAtax compliance</title>
-    <meta name="description" content="Mobile-first SARS tax compliance companion with real-time transaction advisor, smart invoice scanner, bank feed tagging, and provisional tax liability calculator by Ilitha Fintech Operations." />
-    <meta property="og:title" content="ZAtax compliance" />
-    <meta property="og:description" content="Mobile-first SARS tax compliance companion with real-time transaction advisor, smart invoice scanner, bank feed tagging, and provisional tax liability calculator by Ilitha Fintech Operations." />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ilitha Fintech - Full Ecosystem - Dev Recovery</title>
+<style>
+:root{--p:#0d2c54;--a:#00a896;--o:#ff9f1c;--r:#c1121f;--bg:#f6f8ff}
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui}
+body{background:var(--bg)}
+header{background:var(--p);color:white;padding:14px;position:sticky;top:0;z-index:10}
+header h1{font-size:14px}header p{font-size:10px;color:#a0c4ff}
+.badge{background:var(--r);color:white;padding:4px 8px;border-radius:20px;font-size:8px;display:inline-block;margin-top:6px}
+.paybox{background:#fffbe6;border:2px dashed var(--o);padding:12px;border-radius:12px;margin:10px;font-size:11px;line-height:1.5}
+.grid{display:grid;grid-template-columns:1fr;gap:10px;padding:10px}
+.card{background:white;border-radius:14px;padding:14px;box-shadow:0 3px 10px rgba(0,0,0,.07);border-left:5px solid var(--a)}
+.card.o{border-left-color:var(--o)}.card.r{border-left-color:var(--r)}
+.btn{display:inline-block;padding:8px 12px;border-radius:20px;font-size:11px;font-weight:700;text-decoration:none;margin:4px 2px}
+.btn-p{background:var(--p);color:white}.btn-g{background:#fff0f0;color:var(--r);border:1px solid var(--r)}.btn-w{background:#25D366;color:white}
+input,select,textarea{width:100%;padding:8px;margin:4px 0;border:1px solid #ccc;border-radius:8px;font-size:12px}
+button{width:100%;padding:10px;background:var(--p);color:white;border:none;border-radius:20px;font-weight:700;margin-top:6px}
+table{width:100%;font-size:11px;border-collapse:collapse;margin-top:6px}th,td{border:1px solid #ddd;padding:4px;text-align:left}
+footer{background:white;padding:12px;text-align:center;font-size:8px;color:#666;line-height:1.6;margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+<h1>ILITHA FINTECH OPERATIONS (PTY) LTD</h1>
+<p>Reg 2026/707498/07 | 6787 Unique Homes Mangaung | Cell 0847392469 | cengcanis@gmail.com</p>
+<div class="badge">SELF-SERVICE LICENSED - Logbook IN17 + Rule7 Included - Client Generates & Submits Himself - DRAFT Watermarked</div>
+</header>
 
+<div class="paybox">
+<b>💳 PAYMENT - DEVELOPMENT COST RECOVERY PHASE (Jan-Mar 2026)</b><br>
+<b>Bank: Capitec</b><br>
+<b>Acc Name: SL Cengcani</b><br>
+<b>Acc No: 2121467447</b><br>
+Branch: 470010 | Savings Account<br>
+Ref: Your Cell Number + Package (e.g., 0841234567 ZATAX49)<br>
+After EFT, WhatsApp POP to <b>0847392469</b> → 15min activation → License ILITHA-30D-XXXX<br>
+Invoice issued by Ilitha Fintech Operations (Pty) Ltd Reg 2026/707498/07. All funds for development costs before system 100% automated.<br>
+Post-launch (April 2026): All payments move to Paystack business account. Paystack/Ozow require business bank (FNB Business).
+</div>
+
+<div class="grid">
+
+<!-- ZATAX WITH LOGBOOK + RULE7 -->
+<div class="card">
+<h3>A. ZATAX Pocket Advisor - Now with Logbook IN17 + Rule7 + BEE TEMPLATE</h3>
+<p style="font-size:11px;color:#444">Built-in services from /src/projects/zatax now monetisable WITHOUT SARS Sandbox - Self-recorded templates only</p>
+<ul style="font-size:11px;margin:6px 0 6px 16px;line-height:1.5">
+<li><b>Travel Logbook (SARS IN17 format):</b> Client logs date, from, to, business reason, odo start/end, km, business/private. Generates SARS-compliant PDF/TXT. Client keeps for 5 years audit, attaches himself on eFiling. We DO NOT submit to SARS.</li>
+<li><b>Rule 7 Calculator:</b> Rule7(1) subsistence R156/day + Rule7(2) travel allowance 80/20 calc per BGR41 tables - offline formula, summary sheet for IRP5</li>
+<li><b>BEE Affidavit TEMPLATE &lt;R10m:</b> DTI format - client swears at SAPS - NOT certificate - Turnover >R10m referral to SANAS partner R500</li>
+<li><b>Tax Calculator:</b> PAYE/provisional/turnover - synthetic tables</li>
+</ul>
+<div style="background:#f0f8ff;padding:10px;border-radius:10px;margin-top:8px">
+<h4 style="font-size:12px">Try Logbook Now (Functional Demo)</h4>
+<input id="date" type="date"><input id="from" placeholder="From e.g., Mangaung"><input id="to" placeholder="To e.g., Bloem CBD"><input id="reason" placeholder="Reason e.g., Client meeting">
+<input id="o1" type="number" placeholder="Odo Start e.g., 10000"><input id="o2" type="number" placeholder="Odo End e.g., 10050">
+<select id="btype"><option>Business</option><option>Private</option></select>
+<button onclick="addTrip()">Add Trip</button>
+<table id="tbl"><tr><th>Date</th><th>Route</th><th>km</th><th>Type</th></tr></table>
+<p style="font-size:11px;margin-top:6px">Business: <span id="bk">0</span>km | Private: <span id="pk">0</span>km | Total: <span id="tk">0</span>km | %Business: <span id="bp">0</span>%</p>
+<button onclick="genLB()" style="background:var(--a)">Generate Logbook DRAFT (TXT)</button>
+
+<h4 style="font-size:12px;margin-top:12px">Rule7 Calculator (Offline BGR41)</h4>
+<input id="trav" type="number" placeholder="Travel Allowance per year R e.g., 60000"><input id="subs" type="number" placeholder="Subsistence Allowance R e.g., 15000"><input id="days" type="number" placeholder="Days away >8hrs e.g., 20">
+<button onclick="calcR7()">Calculate Taxable Portion</button>
+<div id="r7out" style="font-size:11px;background:white;padding:8px;border-radius:8px;margin-top:6px"></div>
+</div>
+<p style="font-size:10px;color:var(--r);margin-top:8px;font-weight:700">FREE: 3 trips trial | R49/mo Vault+Logbook+Rule7 (30d license) | R99 Logbook 12mo Pack | R149 Affidavit+Logbook Pack</p>
+<a class="btn btn-w" href="https://wa.me/27847392469?text=Hi%20I%20paid%20R49%20ZATAX%20Logbook%20POP%20attached">WhatsApp Activate R49 - Capitec 2121467447</a>
+</div>
+
+<!-- TENDER -->
+<div class="card">
+<h3>B. SA Tender Assist / Sentinel</h3>
+<p style="font-size:11px">CSD synthetic format check (no live CSD) + SBD 1,4,6.1,9 draft PPR2022 + CIDB JV calc + 30% sub-contract checklist. Client uploads himself to etenders.gov.za</p>
+<p style="font-size:10px;font-weight:700">R149/pack (5 tenders) | R349 unlimited 30d</p>
+<a class="btn btn-p" href="https://wa.me/27847392469?text=Hi%20I%20paid%20R149%20Tender%20Pack">Activate R149 - Capitec 2121467447</a>
+</div>
+
+<!-- OTHER -->
+<div class="card">
+<h3>C. Sifuna Ispan Mzantsi | D. InterviewCoach | E. K53 Capsule + Learner Logbook</h3>
+<p style="font-size:11px">Sifuna: CV + Learnership + SETA readiness (R49/mo) | Interview: AI Mock Sesotho/Zulu/Eng + STAR builder (R79/mo) | K53: 64Q simulator + signs voice tutor + self-recorded Learner Logbook TEMPLATE (date, road type, supervisor ID, hours - client gets signed, no eNatis booking) (R49/mo, R99 Family)</p>
+<a class="btn btn-p" href="https://wa.me/27847392469?text=Hi%20I%20want%20Sifuna%20Interview%20K53">Activate R49</a>
+</div>
+
+<!-- LEGALESTATES INDEPENDENT -->
+<div class="card o">
+<h3>G. LegalEstates - Independent Module + Rule7 PoA + Lost Logbook</h3>
+<p style="font-size:11px">Will + Deceased Estate S18(3) &lt;R250k + Lease + Affidavits + Rule7 Power of Attorney TEMPLATE + Lost Logbook (RC1) Affidavit</p>
+<ul style="font-size:11px;margin:6px 0 6px 16px">
+<li><b>Will Pack:</b> Simple will per Wills Act 7 of 1953 - sign with 2 competent witnesses (14+, not beneficiary), each page signed</li>
+<li><b>Estate &lt;R250k:</b> DHA-1663 + death cert + J243 Inventory TEMPLATE + next-of-kin affidavit TEMPLATE (swear at SAPS). Estates >R250k referral to attorney R750</li>
+<li><b>Lease:</b> CPA residential + lodger + proof of residence affidavit TEMPLATE</li>
+<li><b>Rule7 PoA:</b> Power of Attorney TEMPLATE client to attorney for Master/Deeds</li>
+<li><b>Lost Logbook Affidavit:</b> RC1 affidavit TEMPLATE for DLTC duplicate</li>
+</ul>
+<div style="background:#fff8e6;padding:10px;border-radius:10px">
+<input id="wName" placeholder="Will: Your Full Names"><input id="wID" placeholder="Will: ID No"><input id="wBen" placeholder="Beneficiaries e.g., Wife 50%, Child 50%"><input id="wExec" placeholder="Executor Name">
+<button onclick="genWill()">Generate Will DRAFT</button>
+<div id="wOut" style="font-size:11px;white-space:pre-wrap;background:white;padding:8px;margin-top:6px;border-radius:8px"></div>
+</div>
+<p style="font-size:10px;font-weight:700;margin-top:6px">FREE 1 affidavit | R99 Lite (3 docs) | R199 All+Vault (30d)</p>
+<a class="btn btn-w" href="https://wa.me/27847392469?text=Hi%20I%20paid%20R99%20LegalEstates">Activate R99 - Capitec 2121467447</a>
+</div>
+
+<!-- SIFISO SEPARATE -->
+<div class="card" style="border-left-color:#7209b7">
+<h3>F. Sifiso AI Tutor - Separate Module (12 Schools Pilot)</h3>
+<p style="font-size:11px">CAPS ATP G8-12 + Quiz Engine + Synthetic IDs | R2,500/school/mo | R49/learner | 12 schools pilot - 10 private, 2 free township</p>
+<a class="btn btn-p" href="https://sifiso.ilitha-fintech.vercel.app">School Login</a>
+</div>
+
+<!-- BUNDLES -->
+<div class="card r">
+<h3>🔥 BUNDLES - 3 Month Dev Cost Recovery Target R203k</h3>
+<p style="font-size:11px">Sell NOW while SARS Sandbox pending - No live API needed - Client generates & submits himself</p>
+<p style="font-size:12px;line-height:1.6">
+<b>R299 All-Access Comply:</b> ZATax(Logbook+Rule7)+Tender+Sifuna+Interview+K53 (30d)<br>
+<b>R349 Family Protection (BEST SELLER):</b> LegalEstates+ZATax(Logbook+BEE)+Lease+Vault - Will+BEE+Travel+Lease ready<br>
+<b>R399 Mega All 7 incl LegalEstates Independent</b>
+</p>
+<a class="btn btn-w" href="https://wa.me/27847392469?text=Hi%20I%20paid%20R349%20Family%20Bundle%20POP%20attached">Pay R349 Family - Capitec 2121467447</a>
+<a class="btn btn-p" style="background:var(--r)" href="https://wa.me/27847392469?text=Hi%20I%20paid%20R399%20Mega%20Bundle">R399 Mega</a>
+<div style="background:white;padding:8px;border-radius:8px;margin-top:8px;font-size:11px">
+<b>How Activation Works (15 mins):</b><br>
+1. EFT to Capitec 2121467447 Ref: Cell+Package<br>
+2. WhatsApp POP to 0847392469<br>
+3. Receive License: ILITHA-30D-XXXX<br>
+4. Login OTP → Generate DRAFT watermarked → Sign with 2 witnesses / Swear at SAPS → Submit yourself to SARS/etenders/Master/DLTC
+</div>
+</div>
+
+</div>
+
+<footer>
+Ilitha Fintech Operations (Pty) Ltd Reg 2026/707498/07 - 6787 Unique Homes Mangaung - 0847392469 - cengcanis@gmail.com<br>
+Development Cost Recovery Phase Jan-Mar 2026: Payments to founder personal Capitec 2121467447 SL Cengcani for dev costs. Invoices by company 2026/707498/07. Post-launch all payments via Paystack business account.<br>
+Disclaimer: Template SaaS only - NOT affiliated with SARS, CIPC, CSD, OCPO, SANAS, RTMC, Master of High Court, DBE. All drafts watermarked DRAFT - Client to Sign & Submit himself. Logbook = self-recorded IN17 format, Rule7 = offline calc per BGR41 tables, No live API - No legal/tax advice - POPIA Act 4 of 2013 - Zero-Cloud WebCrypto SHA-256<br>
+© 2026 Ilitha - All Rights Reserved - Sifiso AI Tutor separate
+</footer>
+
+<a href="https://wa.me/27847392469?text=Hi%20Ilitha%20I%20paid%20EFT%20to%20Capitec%202121467447%20POP%20attached%20for%20activation" style="position:fixed;bottom:12px;right:12px;background:#25D366;color:white;padding:11px 14px;border-radius:28px;text-decoration:none;font-weight:700;font-size:12px;box-shadow:0 4px 12px rgba(0,0,0,.25)">WhatsApp POP 0847392469</a>
+
+<script>
+let trips=[];
+function addTrip(){
+let d=document.getElementById('date').value,f=document.getElementById('from').value,t=document.getElementById('to').value,r=document.getElementById('reason').value,o1=parseFloat(document.getElementById('o1').value)||0,o2=parseFloat(document.getElementById('o2').value)||0,bt=document.getElementById('btype').value;
+let km=o2-o1; if(km<=0){alert('Check odo');return;}
+trips.push({d,f,t,r,km,bt}); let tbl=document.getElementById('tbl'); let row=tbl.insertRow(); row.innerHTML=`<td>${d}</td><td>${f}-${t}</td><td>${km}</td><td>${bt}</td>`;
+let bk=0,pk=0; trips.forEach(x=>{if(x.bt=='Business')bk+=x.km; else pk+=x.km;}); let tk=bk+pk; document.getElementById('bk').innerText=bk; document.getElementById('pk').innerText=pk; document.getElementById('tk').innerText=tk; document.getElementById('bp').innerText=tk?Math.round(bk/tk*100):0;
+}
+function genLB(){
+if(!trips.length
