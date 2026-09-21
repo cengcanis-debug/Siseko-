@@ -1,20 +1,9 @@
 [
   {
-    "id": "STU-2026-001",
-    "studentNumber": "STU-2026-001",
-    "fullName": "Sipho Dlamini",
-    "name": "S Dlamini",
-    "email": "IIxi5vwxm5ENKq+n:xJR2MKkAUSO86lz1LbAmig==:r1pqfgrG74btrxvxg+CLIuXTqgVyVWU=",
-    "qualification": "POPIA Minimized",
-    "institution": "University of Cape Town"
-  },
-  {
-    "id": "STU-2026-002",
-    "studentNumber": "STU-2026-002",
-    "fullName": "Ayanda Mthembu",
-    "name": "A Mthembu",
-    "email": "aF7kd91LmK0pQa+x:mNB912kLoPaQw12345678g==:z98Aq1MnBvcXzLkjHgFdSaQwErTyUiO=",
-    "qualification": "POPIA Minimized",
-    "institution": "University of the Witwatersrand"
+    "fullName": "Siswe Mahura",
+    "email": "smahura@outlook.com",
+    "qualification": "Postgraduate Diploma in Tax Law",
+    "institution": "University of Cape Town",
+    "studentId": "UCT-TAX-2026-01"
   }
 ]
