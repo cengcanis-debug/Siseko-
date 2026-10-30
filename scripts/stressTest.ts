@@ -95,7 +95,7 @@ recordTest('POPIA', 'Data Masking Consistency & Boundary Checking', () => {
       }
     }
 
-    const maskedId = maskSAId('9204125829081');
+    const maskedId = maskSAId('9001015000085');
     if (maskedId !== '[SA ID MASKED]') {
       throw new Error(`POPIA maskSAId failed: got ${maskedId}`);
     }
@@ -419,7 +419,7 @@ recordTest('ENV_AND_SERVICE', 'Environment parsing, duplicate key resolution & S
   const testService = new SarsApiService(parsedConfig);
   const taxpayerCheck = testService.validateTaxpayer({
     taxNumber: '9304318273',
-    idNumber: '8204125184087',
+    idNumber: '9001015000085',
     tradingName: 'Ilitha Fintech Operations'
   });
 

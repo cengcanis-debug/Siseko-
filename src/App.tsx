@@ -469,7 +469,7 @@ export default function App() {
           
           {/* Brand Identity & Directive8 Tracker */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400/20 via-yellow-500/10 to-transparent border border-amber-400/40 flex items-center justify-center shadow-lg shadow-amber-500/10">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400/20 via-amber-500/10 to-transparent border border-amber-400/40 flex items-center justify-center shadow-lg shadow-amber-500/10">
               <ShieldCheck className="w-6 h-6 text-amber-400" />
             </div>
             <div>
@@ -485,9 +485,9 @@ export default function App() {
               <p className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
                 <span>Directive8SafeRegister</span>
                 <span className="text-slate-600">•</span>
-                <span className="text-emerald-400">Capitec 2121467447 / Ref ILITHA</span>
+                <span className="text-emerald-400">Production Ledger Active</span>
                 <span className="text-slate-600">•</span>
-                <span>FICA Verified</span>
+                <span>FICA Compliant</span>
               </p>
             </div>
           </div>
@@ -551,8 +551,8 @@ export default function App() {
 
       {/* BANNER NOTIFICATION */}
       {banner.visible && (
-        <div className="bg-gradient-to-r from-amber-500/20 via-cyan-500/20 to-emerald-500/20 border-b border-amber-500/30 px-4 py-2 text-center text-xs font-semibold text-amber-200 flex items-center justify-center gap-2 animate-fadeIn">
-          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+        <div className="bg-slate-900/95 border-b border-cyan-500/30 px-4 py-2 text-center text-xs font-semibold text-cyan-200 flex items-center justify-center gap-2 animate-fadeIn shadow-sm">
+          <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
           <span>{banner.message}</span>
         </div>
       )}
@@ -833,7 +833,7 @@ export default function App() {
             onClick={() => setActiveTab('phase17_auditor')}
             className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'phase17_auditor'
-                ? 'bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 shadow-sm'
+                ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -929,7 +929,7 @@ export default function App() {
             onClick={() => setActiveTab('gamification')}
             className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'gamification'
-                ? 'bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 shadow-sm'
+                ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >

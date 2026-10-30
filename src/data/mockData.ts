@@ -19,7 +19,7 @@ export const initialTaxProfile: UserTaxProfile = {
   medicalAidMembers: 0,
   hasRetirementAnnuity: false,
   // Identity & FICA fields
-  idNumber: '8204125184087',
+  idNumber: '9001015000085',
   sarsTaxNumber: '9304318273',
   ficaStatus: 'Verified',
   ficaProgress: 100,
@@ -114,7 +114,7 @@ export const initialTransactions: TaxTransaction[] = [
     deductiblePercentage: 100,
     taxPositionImpactZAR: -2015.00, // 6500 * 0.31 direct tax reduction
     explanation: 'Deductible under SARS Section 11F (up to 27.5% of remuneration/taxable income). Instantly lowers your normal tax calculation by R2,015.',
-    bankAccountSource: 'Nedbank Personal Cheque',
+    bankAccountSource: 'Nedbank Corporate Current',
     status: 'classified',
   },
   {
@@ -165,7 +165,7 @@ export const initialTransactions: TaxTransaction[] = [
     deductiblePercentage: 0,
     taxPositionImpactZAR: 0,
     explanation: 'SARS Section 23(c) strictly prevents claiming deductions or VAT input tax on personal meals or general client entertainment unless specifically billed as a seminar/conference item.',
-    bankAccountSource: 'Nedbank Personal Cheque',
+    bankAccountSource: 'Nedbank Corporate Current',
     status: 'flagged_mixed_use',
   }
 ];

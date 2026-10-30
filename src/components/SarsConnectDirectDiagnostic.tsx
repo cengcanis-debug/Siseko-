@@ -316,7 +316,7 @@ To complete our end-to-end integration (IT3(d), Section 18A, EMP501, and TCS PIN
 Kind regards,
 ${profile?.name || 'Authorized Compliance Technical Officer'}
 South Africa Tax Compliance Advisor Platform
-Tel: +27 11 900 1200 / +27 82 555 1234
+Tel: 0800 00 7277 (SARS Contact Centre)
 `;
 
   // Code snippets for REST v3 API

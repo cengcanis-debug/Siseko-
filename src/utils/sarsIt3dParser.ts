@@ -673,7 +673,7 @@ T|00000006`;
  * T|00000015  <- must = total lines including H and T
  */
 export const SAMPLE_15_LINE_IT3D_PAYLOAD = `H|FH|4.0|2026|2026-03-01|2026-08-31
-H|SE|2026|2026-03-01|2026-08-31|COMPANY|Hope Community Trust|0215551234|tax@hopecommunity.org.za|PO Box 500|Cape Town|8000|9301234567
+H|SE|2026|2026-03-01|2026-08-31|COMPANY|Hope Community Trust|0210000000|tax@hopecommunity.org.za|PO Box 500|Cape Town|8000|9301234567
 H|REI|9301234567|Hope Community Trust
 H|DEI|INDIVIDUAL|800101-ENC-9087|1234567890|Jane Doe|12 Protea Way, Stellenbosch|jane@example.com|082-ENC-4567
 H|DRI|REC-2026-001|2026-04-15|5000|CASH|18A-2026-001

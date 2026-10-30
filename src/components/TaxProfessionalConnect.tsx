@@ -1537,7 +1537,7 @@ export const TaxProfessionalConnect: React.FC<TaxProfessionalConnectProps> = ({
                           {isVideo ? 'Encrypted Video Consultation' : consult.meetingFormat === 'PHONE_CONSULTATION' ? 'Direct Phone Consultation' : 'In-Office Practice Visit'}
                         </span>
                         <span className="text-[11px] text-slate-400 block truncate">
-                          {consult.meetingLink || consult.officeAddress || '+27 (0)11 984 2000'}
+                          {consult.meetingLink || consult.officeAddress || 'Secured Consultation Channel'}
                         </span>
                       </div>
                     </div>

@@ -283,7 +283,7 @@ export const SarsSandboxReadinessHub: React.FC<SarsSandboxReadinessHubProps> = (
     try {
       const res = await sarsApiService.validateTaxpayer({
         taxNumber: taxPinRequest.taxpayerReferenceNumber,
-        idNumber: '8204125184087',
+        idNumber: '9001015000085',
         tradingName: taxPinRequest.requestingEntity.entityName
       });
       setLiveApiValidation(res);

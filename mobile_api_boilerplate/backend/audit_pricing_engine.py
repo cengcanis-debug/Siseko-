@@ -23,7 +23,7 @@ class LogbookRecord(BaseModel):
     vehicle_value: float = Field(..., example=450000.0)
     business_km: float = Field(..., example=120.5)
     reason_for_trip: Optional[str] = Field(default=None, example="Onsite audit check")
-    client_name: Optional[str] = Field(default=None, example="Capitec Bank")
+    client_name: Optional[str] = Field(default=None, example="Enterprise Client")
 
 class AuditExportRequest(BaseModel):
     records: List[LogbookRecord]

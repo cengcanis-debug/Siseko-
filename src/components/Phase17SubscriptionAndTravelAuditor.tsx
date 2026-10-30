@@ -50,11 +50,11 @@ export const Phase17SubscriptionAndTravelAuditor: React.FC<Phase17Props> = ({
       id: 'trip-101',
       date: '2026-06-20',
       departure: 'Sandton City, JHB',
-      destination: 'Capitec Bank HQ, Stellenbosch',
+      destination: 'Regional Corporate Hub, Stellenbosch',
       vehicle_value: 450000,
       business_km: 120.5,
       reason_for_trip: 'Corporate Tax provisional cycle audit & Section 12E SBC review',
-      client_name: 'Capitec Bank Ltd',
+      client_name: 'Stellenbosch Enterprise Client',
       status: 'verified' as 'verified' | 'incomplete'
     },
     {

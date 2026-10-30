@@ -106,7 +106,7 @@ export const DEFAULT_TRADE_TESTING_DATA: TradeTestingEnrolmentData = {
     physicalAddress: '6787 Unique Homes, Mangaung, Bloemfontein, Free State, 9301',
     postalAddress: 'P.O. Box 24901, Mangaung, Bloemfontein, 9300',
     corporateEmail: 'info@ilithafintech.co.za',
-    corporatePhone: '+27 51 405 8000',
+    corporatePhone: '+27 11 000 0000',
     websiteStatus: 'Under development (sandbox build running on secure container runway)',
     productName: 'South Africa Tax Compliance Advisor & Directive8SafeRegister Engine',
     productStage: 'Active development & sandbox trade-testing phase; ISV licensing application in progress.'
@@ -176,27 +176,27 @@ export const DEFAULT_TRADE_TESTING_DATA: TradeTestingEnrolmentData = {
     businessAdministrator: {
       name: 'V Zenzile',
       designation: 'Managing Director & Public Officer',
-      idNumber: '820412 5184 087',
+      idNumber: '900101 5000 085',
       efilingLogin: 'VZENZILE_PR',
       email: 'vzenzile@ilithafintech.co.za',
-      cell: '+27 83 912 4401'
+      cell: '+27 82 000 0000'
     },
     technicalAdministrator: {
       name: 'S Cengcani',
       designation: 'Lead Systems Architect & Integration Developer',
-      idNumber: '890815 5283 089',
+      idNumber: '920202 5000 086',
       efilingLogin: 'SCENGCANI_ADMIN',
-      email: 'cengcanis@gmail.com',
-      cell: '+27 82 555 1234'
+      email: 'developer@ilithafintech.co.za',
+      cell: '+27 82 000 0000'
     },
     technicalUsers: [
       {
         name: 'S Cengcani',
         designation: 'Lead Integration Architect (Primary Developer)',
-        idNumber: '890815 5283 089',
+        idNumber: '920202 5000 086',
         efilingLogin: 'SCENGCANI_DEV',
-        email: 'cengcanis@gmail.com',
-        cell: '+27 82 555 1234',
+        email: 'developer@ilithafintech.co.za',
+        cell: '+27 82 000 0000',
         roleDescription: 'Primary developer handling HTTPS Sterling File Gateway payload encryption, transmission, and error reconciliation.'
       },
       {
@@ -205,7 +205,7 @@ export const DEFAULT_TRADE_TESTING_DATA: TradeTestingEnrolmentData = {
         idNumber: 'SYSTEM_SRV_AUTH_ZA',
         efilingLogin: 'ILITHA_SFG_SRV',
         email: 'devops@ilithafintech.co.za',
-        cell: '+27 82 555 1234',
+        cell: '+27 82 000 0000',
         roleDescription: 'Machine daemon service for automated nightly batch regression testing across the trade test harness.'
       }
     ]
