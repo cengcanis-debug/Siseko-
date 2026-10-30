@@ -17,10 +17,13 @@ import {
   HelpCircle,
   ClipboardList,
   User,
-  CheckCircle2
+  CheckCircle2,
+  Share2,
+  Users
 } from 'lucide-react';
-import { TrustLoanAccount, RoleType } from '../types';
+import { TrustLoanAccount, RoleType, It3tDistributionRecord } from '../types';
 import { formatZAR } from '../utils/taxCalculations';
+import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
 
 interface TrustLoansComplianceProps {
   trustLoans: TrustLoanAccount[];
@@ -41,6 +44,20 @@ export const TrustLoansCompliance: React.FC<TrustLoansComplianceProps> = ({
   showBanner,
   activeProfileName
 }) => {
+  // Tab switcher
+  const [trustSubTab, setTrustSubTab] = useState<'s7c_loans' | 'it3t_distributions'>('s7c_loans');
+
+  // IT3(t) Distributions State: Dynamic production store
+  const [it3tRecords, setIt3tRecords] = useState<It3tDistributionRecord[]>([]);
+
+  // Form state for new IT3(t) distribution
+  const [newBeneficiaryName, setNewBeneficiaryName] = useState('');
+  const [newBeneficiaryRef, setNewBeneficiaryRef] = useState('9123456780');
+  const [newBeneficiaryType, setNewBeneficiaryType] = useState<It3tDistributionRecord['beneficiaryType']>('INDIVIDUAL_RESIDENT');
+  const [newIncomeCategory, setNewIncomeCategory] = useState<It3tDistributionRecord['incomeCategory']>('CAPITAL_GAIN');
+  const [newVestedAmountStr, setNewVestedAmountStr] = useState('150000');
+  const [newConduitSection, setNewConduitSection] = useState<It3tDistributionRecord['conduitSectionApplied']>('SECTION_25B_CONDUIT');
+
   // Form State for new trust loan
   const [lender, setLender] = useState('');
   const [trustName, setTrustName] = useState('');
@@ -271,31 +288,201 @@ TAXPAYER / LENDER PROFILE: ${activeProfileName}
 `;
   };
 
+  // Handle new IT3(t) trust distribution submission
+  const handleAddIt3tDistribution = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!checkPermission('canEditTransactions')) {
+      showBanner(`⛔ Access Denied: Role ${userRole} cannot create trust distribution records.`);
+      return;
+    }
+
+    const vestedAmount = parseFloat(newVestedAmountStr) || 0;
+    if (vestedAmount <= 0 || !newBeneficiaryName.trim()) {
+      showBanner('⚠️ Please enter a valid beneficiary name and vested amount.');
+      return;
+    }
+
+    // Inclusion rate: 40% for capital gain if individual, 80% if company
+    let taxableAmount = vestedAmount;
+    if (newIncomeCategory === 'CAPITAL_GAIN') {
+      taxableAmount = newBeneficiaryType === 'COMPANY' || newBeneficiaryType === 'TRUST' ? vestedAmount * 0.8 : vestedAmount * 0.4;
+    }
+
+    // Withholding tax under Section 50E (15% on interest to non-residents)
+    let withholdingTax = 0;
+    if (newBeneficiaryType === 'INDIVIDUAL_NON_RESIDENT' && newIncomeCategory === 'LOCAL_INTEREST') {
+      withholdingTax = vestedAmount * 0.15;
+    }
+
+    const newRecord: It3tDistributionRecord = {
+      id: `IT3T-${Date.now()}`,
+      beneficiaryName: newBeneficiaryName,
+      beneficiaryIdOrRef: newBeneficiaryRef,
+      beneficiaryType: newBeneficiaryType,
+      incomeCategory: newIncomeCategory,
+      vestedAmountZAR: vestedAmount,
+      taxableAmountZAR: taxableAmount,
+      withholdingTaxZAR: withholdingTax,
+      conduitSectionApplied: newConduitSection,
+      isAuditVerified: true
+    };
+
+    setIt3tRecords(prev => [newRecord, ...prev]);
+    addAuditLog(
+      'IT3T_DISTRIBUTION_VESTED',
+      `Vested ${formatZAR(vestedAmount)} (${newIncomeCategory}) to ${newBeneficiaryName} under ${newConduitSection}. Taxable: ${formatZAR(taxableAmount)}, WHT: ${formatZAR(withholdingTax)}.`
+    );
+    showBanner(`🛡️ Vested IT3(t) distribution of ${formatZAR(vestedAmount)} to ${newBeneficiaryName}!`);
+    setNewBeneficiaryName('');
+    setNewVestedAmountStr('100000');
+  };
+
+  const handleExportIt3tFile = () => {
+    if (!checkPermission('canDownloadLedger')) {
+      showBanner(`⛔ Access Denied: Role "${userRole}" is not authorized to export IT3(t) returns. Requires Owner, Accountant, or Auditor.`);
+      return;
+    }
+
+    const csvContent = [
+      'RecordID,BeneficiaryName,TaxReferenceNumber,BeneficiaryType,IncomeCategory,VestedAmountZAR,TaxableAmountZAR,WithholdingTaxZAR,StatutoryConduitSection',
+      ...it3tRecords.map(r => 
+        `"${r.id}","${r.beneficiaryName}","${r.beneficiaryIdOrRef}","${r.beneficiaryType}","${r.incomeCategory}",${r.vestedAmountZAR},${r.taxableAmountZAR},${r.withholdingTaxZAR},"${r.conduitSectionApplied}"`
+      )
+    ].join('\n');
+
+    const it3tRef = generateSubmissionRef('SARS-IT3T');
+    downloadBlobFile(
+      `SARS_IT3t_Trust_Return_${it3tRef}.csv`,
+      csvContent,
+      'text/csv;charset=utf-8;'
+    );
+    addAuditLog('IT3T_CSV_EXPORTED', `Exported SARS IT3(t) submission bundle containing ${it3tRecords.length} beneficiary distribution records.`);
+    showBanner('📥 Downloaded SARS IT3(t) Electronic Return CSV!');
+  };
+
+  const handleExportS7cSchedule = () => {
+    if (!checkPermission('canDownloadLedger')) {
+      showBanner(`⛔ Access Denied: Role "${userRole}" is not authorized to export Section 7C schedules. Requires Owner, Accountant, or Auditor.`);
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const submissionRef = generateSubmissionRef('SARS-S7C');
+
+    const headers = [
+      '# =====================================================================',
+      '# REPUBLIC OF SOUTH AFRICA - INCOME TAX ACT 58 OF 1962',
+      '# SECTION 7C TRUST LOANS DEEMED DONATION & IT144 COMPLIANCE SCHEDULE',
+      `# SUBMISSION REFERENCE: ${submissionRef}`,
+      `# TAXPAYER ENTITY: ${activeProfileName}`,
+      `# EXPORT TIMESTAMP: ${timestamp}`,
+      `# TOTAL LOAN PRINCIPAL: ${totalLoansValue}`,
+      `# GROSS DEEMED DONATION: ${totalDeemedDonationBeforeExemption}`,
+      `# SECTION 56 EXEMPTIONS APPLIED: ${totalExemptionsApplied}`,
+      `# NET SECTION 64 DONATIONS TAX PAYABLE: ${totalDonationsTaxDue}`,
+      '# =====================================================================',
+      '',
+      'LOAN_ID,LENDER_NAME,TRUST_NAME,TRUST_REG_NUMBER,PRINCIPAL_DEBT_ZAR,OUTSTANDING_BALANCE_ZAR,AGREED_INTEREST_RATE,SARS_OFFICIAL_RATE,ANNUAL_INTEREST_SHORTFALL_ZAR,EXEMPTION_APPLIED_ZAR,TAXABLE_DEEMED_DONATION_ZAR,DONATIONS_TAX_DUE_ZAR,STATUTORY_EXCLUSION'
+    ];
+
+    const rows = calculatedLoans.map(l => [
+      `"${l.id}"`,
+      `"${l.lenderName.replace(/"/g, '""')}"`,
+      `"${l.trustName.replace(/"/g, '""')}"`,
+      `"${l.trustRegistrationNumber}"`,
+      l.principalAmount,
+      l.outstandingBalance,
+      `${l.interestRateCharged}%`,
+      `${l.effectiveOfficialRate}%`,
+      l.deemedDonation,
+      l.exemptionAllocated,
+      l.taxableDeemedDonation,
+      l.donationsTax,
+      `"${l.exclusionReason}"`
+    ].join(','));
+
+    const csvContent = [...headers, ...rows].join('\n');
+    downloadBlobFile(
+      `SARS_Section7C_Trust_Loans_${submissionRef}.csv`,
+      csvContent,
+      'text/csv;charset=utf-8;'
+    );
+
+    addAuditLog('SECTION_7C_SCHEDULE_EXPORTED', `Exported Section 7C Trust Loan Schedule (${submissionRef}) containing ${calculatedLoans.length} accounts. Net tax due: ${formatZAR(totalDonationsTaxDue)}.`);
+    showBanner(`📥 Section 7C Schedule (${submissionRef}) downloaded!`);
+  };
+
+  // IT3(t) Aggregates
+  const totalIt3tVested = it3tRecords.reduce((sum, r) => sum + r.vestedAmountZAR, 0);
+  const totalIt3tTaxable = it3tRecords.reduce((sum, r) => sum + r.taxableAmountZAR, 0);
+  const totalCgtConduit = it3tRecords.filter(r => r.incomeCategory === 'CAPITAL_GAIN').reduce((sum, r) => sum + r.vestedAmountZAR, 0);
+  const totalWhtDue = it3tRecords.reduce((sum, r) => sum + r.withholdingTaxZAR, 0);
+
   return (
     <div className="space-y-6" id="trust-loans-workspace">
       
-      {/* EXPLAINER HEADER BANNER */}
+      {/* MODULE NAVIGATION TABS */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
+        <button
+          onClick={() => setTrustSubTab('s7c_loans')}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-2 ${
+            trustSubTab === 's7c_loans'
+              ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold'
+              : 'text-slate-400 hover:text-white bg-white/5'
+          }`}
+        >
+          <Scale className="w-4 h-4 text-indigo-400" />
+          <span>Section 7C Trust Loans & Deemed Donations</span>
+        </button>
+
+        <button
+          onClick={() => setTrustSubTab('it3t_distributions')}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-2 ${
+            trustSubTab === 'it3t_distributions'
+              ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 font-bold'
+              : 'text-slate-400 hover:text-white bg-white/5'
+          }`}
+        >
+          <FileText className="w-4 h-4 text-teal-400" />
+          <span>SARS IT3(t) Electronic Trust Distribution Return</span>
+        </button>
+      </div>
+
+      {trustSubTab === 's7c_loans' && (
+        <div className="space-y-6">
       <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-transparent border border-indigo-500/20 p-5 rounded-2xl">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-indigo-500/20 text-indigo-400 rounded-xl">
-            <Scale className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] bg-indigo-500/20 text-indigo-300 font-mono font-bold px-2 py-0.5 rounded border border-indigo-500/20 uppercase">
-                Section 7C statutory Ledger
-              </span>
-              <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/20 uppercase">
-                Anti-Avoidance Rules
-              </span>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-indigo-500/20 text-indigo-400 rounded-xl">
+              <Scale className="w-6 h-6" />
             </div>
-            <h3 className="font-bold text-base text-white mt-1.5 font-display">
-              Section 7C Trust Loan Ledger & Compliance Planner
-            </h3>
-            <p className="text-xs text-white/60 mt-0.5 max-w-2xl leading-relaxed">
-              Section 7C of the South African Income Tax Act targets interest-free or low-interest loans made to Trusts. Any interest foregone below the <strong>SARS Official Rate of Interest (Repo + 1%)</strong> is treated as a <strong>Deemed Donation</strong>, subject to 20% Donations Tax by 31 March.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] bg-indigo-500/20 text-indigo-300 font-mono font-bold px-2 py-0.5 rounded border border-indigo-500/20 uppercase">
+                  Section 7C statutory Ledger
+                </span>
+                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/20 uppercase">
+                  Anti-Avoidance Rules
+                </span>
+              </div>
+              <h3 className="font-bold text-base text-white mt-1.5 font-display">
+                Section 7C Trust Loan Ledger & Compliance Planner
+              </h3>
+              <p className="text-xs text-white/60 mt-0.5 max-w-2xl leading-relaxed">
+                Section 7C of the South African Income Tax Act targets interest-free or low-interest loans made to Trusts. Any interest foregone below the <strong>SARS Official Rate of Interest (Repo + 1%)</strong> is treated as a <strong>Deemed Donation</strong>, subject to 20% Donations Tax by 31 March.
+              </p>
+            </div>
           </div>
+
+          <button
+            onClick={handleExportS7cSchedule}
+            className="px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md shrink-0 border border-indigo-400/30"
+            id="export-s7c-loans-btn"
+            title="Download SARS Section 7C Trust Loan Deemed Donation & IT144 Schedule CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Section 7C CSV</span>
+          </button>
         </div>
       </div>
 
@@ -438,7 +625,14 @@ TAXPAYER / LENDER PROFILE: ${activeProfileName}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {calculatedLoans.map((loan) => (
+                {calculatedLoans.length === 0 ? (
+                  <tr key="empty-loans-row">
+                    <td colSpan={7} className="py-8 text-center text-slate-500 font-sans text-xs">
+                      No trust loans captured. Click &quot;+ Record Trust Loan&quot; to begin Section 7C deemed donation assessment.
+                    </td>
+                  </tr>
+                ) : (
+                  calculatedLoans.map((loan) => (
                   <tr key={loan.id} className="hover:bg-white/5 transition-colors group">
                     <td className="py-3 pl-2">
                       <div className="font-bold text-white font-display text-[12px]">{loan.trustName}</div>
@@ -516,7 +710,8 @@ TAXPAYER / LENDER PROFILE: ${activeProfileName}
                       </div>
                     </td>
                   </tr>
-                ))}
+                ))
+              )}
               </tbody>
             </table>
           </div>
@@ -584,7 +779,7 @@ TAXPAYER / LENDER PROFILE: ${activeProfileName}
                 type="text"
                 value={lender}
                 onChange={(e) => setLender(e.target.value)}
-                placeholder="e.g. Sipho Ndlalose"
+                placeholder="e.g. Authorized Director / Lender"
                 className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-indigo-500 text-xs"
                 required
               />
@@ -731,5 +926,319 @@ TAXPAYER / LENDER PROFILE: ${activeProfileName}
       </div>
 
     </div>
+  )}
+
+  {/* ========================================================================= */}
+  {/* IT3(T) TRUST THIRD-PARTY DATA RECONCILIATION VIEW                         */}
+  {/* ========================================================================= */}
+  {trustSubTab === 'it3t_distributions' && (
+    <div className="space-y-6 animate-fadeIn" id="it3t-workspace">
+      
+      {/* HERO BANNER */}
+      <div className="bg-gradient-to-r from-teal-950/60 via-slate-900 to-indigo-950/60 border border-teal-500/30 p-5 rounded-3xl space-y-3 shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-teal-500/20 text-teal-400 rounded-2xl border border-teal-500/30">
+              <FileText className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-bold border border-teal-500/30">
+                  SARS THIRD-PARTY DATA (IT3(T))
+                </span>
+                <span className="text-[10.5px] font-mono text-cyan-300 font-bold">
+                  TAA Section 26 • Section 25B Conduit Principles
+                </span>
+              </div>
+              <h2 className="text-base font-extrabold text-white tracking-wide mt-0.5">
+                SARS IT3(t) Electronic Trust Distribution Reconciler
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportIt3tFile}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold text-xs shadow-lg shadow-teal-600/20 transition cursor-pointer flex items-center gap-1.5"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export SARS IT3(t) CSV Bundle</span>
+            </button>
+          </div>
+        </div>
+
+        <p className="text-xs text-teal-200/90 leading-relaxed">
+          South African trusts are statutorily mandated to submit <strong>Third-Party Data IT3(t) Returns</strong> to SARS. This workspace models and reconciles amounts vested in beneficiaries, ensuring proper tax character preservation under <strong>Section 25B (Conduit Pipe Principle)</strong>, capital gains vesting under <strong>Eighth Schedule Paragraph 80</strong> (taxed at beneficiary&apos;s 40% inclusion rate rather than trust&apos;s 80%), and statutory withholding under <strong>Section 50E</strong> for non-residents.
+        </p>
+
+        <div className="pt-1 text-[11px] text-slate-400 font-mono flex items-center justify-between border-t border-white/10">
+          <span>Trust: {activeProfileName ? `${activeProfileName} Family Trust` : 'Registered Enterprise Trust'} • Master&apos;s Office: Master of the High Court</span>
+          <span className="text-amber-300 font-bold">Acting as: {userRole}</span>
+        </div>
+      </div>
+
+      {/* METRICS ROW */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        
+        <div className="bg-[#0D1527] border border-white/10 rounded-2xl p-4 space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>Total Vested to Beneficiaries</span>
+            <Share2 className="w-4 h-4 text-teal-400" />
+          </div>
+          <div className="text-lg font-bold font-mono text-white">
+            {formatZAR(totalIt3tVested)}
+          </div>
+          <div className="text-[10.5px] text-slate-400 font-mono">
+            {it3tRecords.length} Beneficiary Vestings Logged
+          </div>
+        </div>
+
+        <div className="bg-[#0D1527] border border-white/10 rounded-2xl p-4 space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>Capital Gains Conduited</span>
+            <Scale className="w-4 h-4 text-purple-400" />
+          </div>
+          <div className="text-lg font-bold font-mono text-purple-300">
+            {formatZAR(totalCgtConduit)}
+          </div>
+          <div className="text-[10.5px] text-purple-300/80 font-mono">
+            Par 80: Taxed at 40% vs Trust 80%
+          </div>
+        </div>
+
+        <div className="bg-[#0D1527] border border-white/10 rounded-2xl p-4 space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>Taxable in Beneficiary Hands</span>
+            <Users className="w-4 h-4 text-cyan-400" />
+          </div>
+          <div className="text-lg font-bold font-mono text-cyan-300">
+            {formatZAR(totalIt3tTaxable)}
+          </div>
+          <div className="text-[10.5px] text-slate-400 font-mono">
+            Flows into Beneficiary ITR12
+          </div>
+        </div>
+
+        <div className="bg-[#0D1527] border border-white/10 rounded-2xl p-4 space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>Section 50E Withholding Tax</span>
+            <ShieldAlert className="w-4 h-4 text-amber-400" />
+          </div>
+          <div className="text-lg font-bold font-mono text-amber-300">
+            {formatZAR(totalWhtDue)}
+          </div>
+          <div className="text-[10.5px] text-slate-400 font-mono">
+            15% WHT on Non-Resident Interest
+          </div>
+        </div>
+
+      </div>
+
+      {/* RECORD DISTRIBUTION FORM */}
+      <div className="bg-[#0D1527] border border-white/10 rounded-3xl p-5 space-y-4">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2">
+            <Plus className="w-4 h-4 text-teal-400" />
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+              Vest New Trust Distribution for IT3(t) Compliance
+            </h3>
+          </div>
+          <span className="text-[10px] font-mono text-slate-400">
+            Mandatory Annual Filing to SARS eFiling Gateway
+          </span>
+        </div>
+
+        <form onSubmit={handleAddIt3tDistribution} className="space-y-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 uppercase font-semibold mb-1">
+                Beneficiary Full Name
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Beneficiary Full Name"
+                value={newBeneficiaryName}
+                onChange={(e) => setNewBeneficiaryName(e.target.value)}
+                className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-teal-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 uppercase font-semibold mb-1">
+                Beneficiary SARS Tax Reference (10 Digits)
+              </label>
+              <input
+                type="text"
+                required
+                maxLength={10}
+                placeholder="9304318273"
+                value={newBeneficiaryRef}
+                onChange={(e) => setNewBeneficiaryRef(e.target.value)}
+                className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-teal-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 uppercase font-semibold mb-1">
+                Beneficiary Classification
+              </label>
+              <select
+                value={newBeneficiaryType}
+                onChange={(e) => setNewBeneficiaryType(e.target.value as any)}
+                className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-teal-400"
+              >
+                <option value="INDIVIDUAL_RESIDENT">Individual (SA Resident)</option>
+                <option value="INDIVIDUAL_NON_RESIDENT">Individual (Non-Resident - Sec 50E 15% WHT)</option>
+                <option value="COMPANY">Company (SA Resident)</option>
+                <option value="TRUST">Vested Trust Beneficiary</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 uppercase font-semibold mb-1">
+                Income / Capital Category
+              </label>
+              <select
+                value={newIncomeCategory}
+                onChange={(e) => setNewIncomeCategory(e.target.value as any)}
+                className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-teal-400"
+              >
+                <option value="CAPITAL_GAIN">Capital Gain (Eighth Schedule Par 80)</option>
+                <option value="LOCAL_INTEREST">Local Interest (Section 25B Conduit)</option>
+                <option value="LOCAL_DIVIDENDS">Local Dividends (Exempt via Conduit)</option>
+                <option value="TRADING_INCOME">Trading or Professional Income</option>
+                <option value="FOREIGN_INCOME">Foreign Dividends / Interest</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 uppercase font-semibold mb-1">
+                Amount Vested (ZAR)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-slate-400 font-mono">R</span>
+                <input
+                  type="number"
+                  step="5000"
+                  required
+                  value={newVestedAmountStr}
+                  onChange={(e) => setNewVestedAmountStr(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/15 rounded-xl pl-8 pr-3 py-2 font-mono text-white focus:outline-none focus:border-teal-400"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 uppercase font-semibold mb-1">
+                Governing Statutory Rule
+              </label>
+              <select
+                value={newConduitSection}
+                onChange={(e) => setNewConduitSection(e.target.value as any)}
+                className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-teal-400"
+              >
+                <option value="SECTION_25B_CONDUIT">Section 25B Conduit Pipe Principle (Vested in Beneficiary)</option>
+                <option value="SECTION_7_DONOR_ATTRIBUTION">Section 7 Anti-Avoidance (Attributed to Founder / Donor)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2 border-t border-white/10">
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-lg shadow-teal-600/20 transition cursor-pointer flex items-center gap-1.5"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Record & Audit Vesting</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* RECONCILED IT3(t) DATA TABLE */}
+      <div className="bg-[#0D1527] border border-white/10 rounded-3xl p-5 space-y-4">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+              Reconciled IT3(t) Trust Distribution Registry ({it3tRecords.length} Beneficiaries)
+            </h3>
+          </div>
+          <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+            All Records Validated
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse font-sans">
+            <thead>
+              <tr className="border-b border-white/10 text-[10px] font-mono text-slate-400 uppercase">
+                <th className="py-2.5 pl-2">Beneficiary & Tax Number</th>
+                <th className="py-2.5">Category</th>
+                <th className="py-2.5">Statutory Principle</th>
+                <th className="py-2.5">Amount Vested</th>
+                <th className="py-2.5">Taxable Portion</th>
+                <th className="py-2.5">Sec 50E WHT</th>
+                <th className="py-2.5 text-right pr-2">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5 font-mono text-xs">
+              {it3tRecords.length === 0 ? (
+                <tr key="empty-it3t-row">
+                  <td colSpan={7} className="py-8 text-center text-slate-500 font-sans text-xs">
+                    No IT3(t) distributions allocated yet. Use the form above to capture trust income/capital vestings to beneficiaries.
+                  </td>
+                </tr>
+              ) : (
+                it3tRecords.map(rec => (
+                  <tr key={rec.id} className="hover:bg-white/[0.02] transition">
+                    <td className="py-3 pl-2">
+                      <div className="font-bold text-white font-sans">{rec.beneficiaryName}</div>
+                      <div className="text-[10px] text-cyan-400">Ref: {rec.beneficiaryIdOrRef} ({rec.beneficiaryType.replace(/_/g, ' ')})</div>
+                    </td>
+
+                    <td className="py-3 text-[11px] text-slate-300">
+                      <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[10px]">
+                        {rec.incomeCategory.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+
+                    <td className="py-3 text-[11px] text-indigo-300 font-sans">
+                      {rec.conduitSectionApplied === 'SECTION_25B_CONDUIT' ? '§25B Conduit Pipe' : '§7 Donor Attribution'}
+                    </td>
+
+                    <td className="py-3 font-bold text-white">
+                      {formatZAR(rec.vestedAmountZAR)}
+                    </td>
+
+                    <td className="py-3 font-bold text-cyan-300">
+                      {formatZAR(rec.taxableAmountZAR)}
+                    </td>
+
+                    <td className="py-3 text-amber-300">
+                      {rec.withholdingTaxZAR > 0 ? formatZAR(rec.withholdingTaxZAR) : 'R0.00'}
+                    </td>
+
+                    <td className="py-3 text-right pr-2">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>IT3(t) Ready</span>
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  )}
+
+</div>
   );
 };

@@ -49,6 +49,40 @@ export interface UserTaxProfile {
   isDstApproved?: boolean;
   dstReferenceNumber?: string;
   hasDebtAgreementInVault?: boolean;
+  // Section 12BA 125% Renewable Energy Super-Allowance
+  is12BAApplied?: boolean;
+  solarSystemCost?: number;
+  solarInstallationDate?: string;
+  hasSolarCocInVault?: boolean;
+  hasEskomGridTieApproval?: boolean;
+  // Section 6quat Foreign Tax Rebate (FTC)
+  is6quatApplied?: boolean;
+  foreignTaxableIncome?: number;
+  foreignTaxWithheldZAR?: number;
+  foreignTaxJurisdiction?: string;
+  hasForeignTaxVoucherInVault?: boolean;
+  // Section 12H Additional Learnership Allowance (SETA Skills Incentive)
+  is12HApplied?: boolean;
+  learnersCount?: number;
+  disabledLearnersCount?: number;
+  learnershipNqfLevel?: 'NQF 1-6' | 'NQF 7-10';
+  isLearnershipCompletedInYear?: boolean;
+  hasSetaRegistrationInVault?: boolean;
+  setaRegistrationNumber?: string;
+}
+
+export interface It3tDistributionRecord {
+  id: string;
+  beneficiaryName: string;
+  beneficiaryIdOrRef: string;
+  beneficiaryType: 'INDIVIDUAL_RESIDENT' | 'INDIVIDUAL_NON_RESIDENT' | 'COMPANY' | 'TRUST';
+  incomeCategory: 'LOCAL_INTEREST' | 'LOCAL_DIVIDENDS' | 'FOREIGN_INCOME' | 'CAPITAL_GAIN' | 'TRADING_INCOME';
+  vestedAmountZAR: number;
+  taxableAmountZAR: number;
+  withholdingTaxZAR: number;
+  conduitSectionApplied: 'SECTION_25B_CONDUIT' | 'SECTION_7_DONOR_ATTRIBUTION';
+  deemedDonorName?: string;
+  isAuditVerified: boolean;
 }
 
 export interface TaxTransaction {
@@ -122,6 +156,23 @@ export interface PendingBankTransaction {
   type: 'credit' | 'debit';
   suggestedAction: 'income' | 'expense' | 'mixed_use_split';
   flagReason?: string;
+}
+
+export interface CategorizationRule {
+  id: string;
+  name: string;
+  pattern: string; // e.g. "UBER", "DISCOVERY", "AWS"
+  matchType: 'contains' | 'exact' | 'starts_with' | 'regex';
+  category: string;
+  sarsSection?: string;
+  type?: 'income' | 'expense' | 'asset' | 'investment';
+  deductiblePercentage?: number;
+  priority: number; // Higher number = higher precedence
+  enabled: boolean;
+  notes?: string;
+  createdAt: string;
+  lastMatchedAt?: string;
+  matchCount?: number;
 }
 
 export interface SarsLegislationUpdate {
@@ -240,6 +291,7 @@ export interface EntityProfile {
   }>;
   extraBadgesUnlocked?: string[];
   pointsMultiplier?: number;
+  grossIncome?: number;
 }
 
 export interface RecurringExpense {
@@ -270,3 +322,416 @@ export interface TrustLoanAccount {
   exclusionReason: 'None' | 'Primary Residence' | 'Special Trust Disability' | 'Public Benefit Organisation' | 'Vested Beneficiary Right';
 }
 
+export type SarsRiskSeverity = 'COMPLIANT' | 'LOW_RISK' | 'MEDIUM_RISK' | 'HIGH_EXPOSURE' | 'CRITICAL_DISALLOWANCE';
+
+export interface NegativeImplication {
+  id: string;
+  category: 'DISALLOWANCE' | 'PENALTY_TAA_222' | 'INTEREST_89QUAT' | 'VAT_CLAWBACK' | 'EVIDENCE_DEFICIT' | 'FICA_CTR';
+  statutoryReference: string; // e.g. "Income Tax Act §23(g)", "TAA §222", "VAT Act §17(2)"
+  title: string;
+  description: string;
+  severity: SarsRiskSeverity;
+  estimatedFinancialExposureZAR: number;
+  mitigationAdvice: string;
+}
+
+export interface RequiredVaultEvidence {
+  documentType: string;
+  description: string;
+  isAttachedInVault: boolean;
+  vaultRefId?: string;
+  mandatoryForDeduction: boolean;
+}
+
+export interface ThirdPartyDataFeedItem {
+  id: string;
+  sourceType: 'IRP5_SALARY' | 'IT3B_INTEREST' | 'IT3C_CAPITAL_GAIN' | 'MEDICAL_SCHEME_6A' | 'RA_CONTRIBUTION_11F' | 'IT3D_SECTION_18A';
+  providerName: string;
+  referenceNumber: string;
+  grossAmountZAR: number;
+  taxDeductedZAR: number;
+  sarsCaptured: boolean;
+  status: 'VERIFIED' | 'DISCREPANCY_FLAGGED' | 'CONFIRMED';
+  sourceCode: string;
+}
+
+export interface UnclaimedAutoAssessmentDeduction {
+  sourceCode: string; // e.g. "4015", "4028", "4014"
+  title: string;
+  description: string;
+  amountZAR: number;
+  estimatedTaxBenefitZAR: number;
+  vaultCorroborationAttached: boolean;
+  vaultDocName?: string;
+  statutorySection: string;
+}
+
+export interface AutoAssessmentDossier {
+  assessmentNoticeNumber: string;
+  taxYear: string;
+  issuedDate: string;
+  statutoryDeadlineDate: string;
+  businessDaysRemaining: number;
+  taxpayerName: string;
+  taxReferenceNumber: string;
+  status: 'PENDING_TAXPAYER_REVIEW' | 'ACCEPTED_STANDS_AS_ORIGINAL' | 'EDITED_AND_RESUBMITTED' | 'DISPUTED_UNDER_RULE_7';
+  
+  // Third Party Feed Items that SARS pulled
+  thirdPartyFeeds: ThirdPartyDataFeedItem[];
+  
+  // SARS Auto Assessment figures (blind third-party data only)
+  sarsGrossIncomeZAR: number;
+  sarsAllowableDeductionsZAR: number;
+  sarsTaxableIncomeZAR: number;
+  sarsNormalTaxZAR: number;
+  sarsTaxCreditsZAR: number;
+  sarsPayeAndPrepaidZAR: number;
+  sarsAssessedOutcomeZAR: number; // negative = refund from SARS, positive = owe SARS
+  
+  // True Client Ledger & Vault Figures (including uncaptured travel logbook, home office, etc.)
+  trueGrossIncomeZAR: number;
+  trueAllowableDeductionsZAR: number;
+  trueTaxableIncomeZAR: number;
+  trueNormalTaxZAR: number;
+  trueTaxCreditsZAR: number;
+  trueAssessedOutcomeZAR: number;
+  
+  // The Variance / Taxpayer Value at Stake
+  unclaimedDeductions: UnclaimedAutoAssessmentDeduction[];
+  refundDiscrepancyZAR: number; // positive = taxpayer is entitled to this much MORE refund
+  recommendation: 'REJECT_AND_EDIT' | 'ACCEPT_AS_ACCURATE' | 'LODGE_RULE_7_DISPUTE';
+  recommendationSummary: string;
+}
+
+export interface TransactionPreAuditResult {
+  transactionId: string;
+  overallRisk: SarsRiskSeverity;
+  riskScore: number; // 0 (perfectly compliant) to 100 (critical non-compliance)
+  auditedAt: string;
+  sourceCodeAffected: string; // e.g. "4015 (Business Travel)", "4016 (Entertainment)", "4030 (Consulting)"
+  claimedDeductionAmountZAR: number;
+  projectedDisallowedAmountZAR: number;
+  estimatedAdditionalTaxPayableZAR: number;
+  understatementPenaltyPercentage: number; // 0%, 10%, 25%, 50%, 100%
+  understatementPenaltyAmountZAR: number;
+  estimated89quatInterestZAR: number;
+  totalPotentialSarsExposureZAR: number;
+  negativeImplications: NegativeImplication[];
+  requiredVaultEvidence: RequiredVaultEvidence[];
+  preventativeRecommendations: string[];
+  ruleCitation: string;
+  isDefensibleUnderRule7: boolean;
+}
+
+export type VdpDisclosureStatus = 'DRAFT' | 'ELIGIBILITY_VERIFIED' | 'SUBMITTED_TO_SARS' | 'VDP_AGREEMENT_SIGNED' | 'REMEDIED';
+
+export type VdpOversightCategory = 
+  | 'UNCLAIMABLE_DEDUCTION' 
+  | 'OMITTED_INCOME' 
+  | 'VAT_OUTPUT_UNDERPAYMENT' 
+  | 'DUAL_USE_UNAPPORTIONED' 
+  | 'PAYE_WITHHOLDING_ERROR' 
+  | 'FOREIGN_INCOME_OMISSION';
+
+export interface VdpEligibilityCriteria {
+  isVoluntaryNoPriorAuditNotice: boolean; // TAA §227(a)
+  hasMaterialDefault: boolean;             // TAA §227(b)
+  isFullAndComplete: boolean;             // TAA §227(c)
+  involvesShortfallPayment: boolean;      // TAA §227(d)
+  doesNotYieldRefund: boolean;            // TAA §227(e)
+}
+
+export interface VdpApplicationDossier {
+  id: string;
+  vdpRefNumber: string;
+  taxpayerName: string;
+  taxReferenceNumber: string;
+  taxPeriod: string;
+  oversightTitle: string;
+  oversightDescription: string;
+  category: VdpOversightCategory;
+  statutoryReference: string;
+  affectedTransactionIds: string[];
+  understatedTaxShortfallZAR: number;
+  standardAuditPenaltyPercentage: number;
+  standardAuditPenaltyAmountZAR: number;
+  mitigatedVdpPenaltyPercentage: number;
+  mitigatedVdpPenaltyAmountZAR: number;
+  penaltySavedZAR: number;
+  estimated89quatInterestZAR: number;
+  isCriminalImmunityGranted: boolean;
+  eligibilityCriteria: VdpEligibilityCriteria;
+  status: VdpDisclosureStatus;
+  submittedAt?: string;
+  signedOffByRole?: RoleType;
+  remediationPlan: string;
+}
+
+export interface Vat201Declaration {
+  id: string;
+  submissionRef: string;
+  vendorName: string;
+  vatRegistrationNumber: string;
+  taxPeriod: string;
+  standardRatedSupplies: number; // Box 1
+  outputStandardVat: number; // Box 4 (15%)
+  zeroRatedSupplies: number; // Box 2
+  exemptSupplies: number; // Box 3
+  totalSupplies: number;
+  totalOutputTax: number;
+  inputCapitalGoods: number; // Box 14
+  inputOperationalGoods: number; // Box 15
+  apportionmentRatio: number; // Section 17(1) Turnover/Apportionment %
+  badDebtRelief: number; // Section 22(1)
+  customsVatPaid: number;
+  totalInputTax: number; // Box 19
+  netVatPayableOrRefund: number; // Positive = Payable to SARS, Negative = Refundable
+  status: 'DRAFT' | 'CALCULATED' | 'LODGED_PENDING' | 'LODGED_CONFIRMED';
+  lodgedAt?: string;
+  lodgedByRole?: RoleType;
+  sarsReceiptNumber?: string;
+  paymentDueDate?: string;
+  notes?: string;
+}
+
+export interface AiDeductionSuggestion {
+  id: string;
+  title: string;
+  statutorySection: string;
+  category: 'DEDUCTION' | 'TAX_CREDIT' | 'ACCELERATED_ALLOWANCE' | 'REBATE';
+  potentialSavingZAR: number;
+  qualifyingAmountZAR: number;
+  confidenceScore: number;
+  sarsJustification: string;
+  legalBasis: string;
+  actionableSteps: string[];
+  requiredDocumentation: string[];
+  linkedTransactionIds: string[];
+  status: 'SUGGESTED' | 'APPLIED' | 'DISMISSED';
+}
+
+export interface AiDeductionAnalysisResult {
+  suggestions: AiDeductionSuggestion[];
+  totalIdentifiedSavingsZAR: number;
+  auditRiskAssessment: 'LOW' | 'MEDIUM' | 'HIGH';
+  summary: string;
+  timestamp: string;
+  modelUsed: string;
+}
+
+// ============================================================================
+// TAX PROFESSIONAL CONNECT & SECURE CLIENT-PRACTITIONER COLLABORATION
+// Compliant with Section 240 of the Tax Administration Act 28 of 2011 (TAA)
+// ============================================================================
+
+export type ProfessionalBody = 'SAIT' | 'SAICA' | 'CIBA' | 'ACCA' | 'IAC';
+
+export interface TaxProfessionalPermissions {
+  canViewProfileAndFica: boolean;
+  canViewTransactions: boolean;
+  canViewVatDeclarations: boolean;
+  canViewAuditVault: boolean; // Logbooks, vehicle purchase agreements, solar CoC, etc.
+  canViewIta34AndObjections: boolean; // ITA34 assessments & Rule 7 Notice of Objection
+  canViewTaxShieldSimulations: boolean; // Section 12BA, 24J, 11(gC), SBC, ETI
+  canExportDossiers: boolean;
+  canSubmitFilingsOnBehalf: boolean; // SARS eFiling registered practitioner delegate
+  dataMaskingLevel: 'FULL_ACCESS' | 'MASK_PERSONAL_IDENTIFIERS' | 'AGGREGATED_ONLY';
+}
+
+export interface TaxPractitionerInvite {
+  id: string;
+  practitionerName: string;
+  practitionerEmail: string;
+  firmName: string;
+  sarsPrNumber: string; // e.g., 'PR-0089421'
+  professionalBody: ProfessionalBody;
+  specialization: string;
+  inviteStatus: 'PENDING_INVITE' | 'ACTIVE_CONNECTED' | 'ACCESS_EXPIRED' | 'REVOKED';
+  invitedAt: string;
+  acceptedAt?: string;
+  expiresAt: string;
+  inviteToken: string;
+  pinCode: string;
+  sarsMandateSigned: boolean;
+  mandateReference?: string;
+  permissions: TaxProfessionalPermissions;
+  lastAccessedAt?: string;
+}
+
+export interface AdvisoryMessageAttachment {
+  id: string;
+  name: string;
+  type: 'document' | 'transaction' | 'assessment' | 'logbook' | 'concession';
+  referenceId?: string;
+  badge?: string;
+  summary?: string;
+}
+
+export interface AdvisoryMessage {
+  id: string;
+  threadId: string;
+  senderRole: 'Taxpayer' | 'Practitioner';
+  senderName: string;
+  timestamp: string;
+  message: string;
+  attachments?: AdvisoryMessageAttachment[];
+  isEncrypted: boolean;
+  encryptionAlgorithm: string;
+}
+
+export interface AdvisoryThread {
+  id: string;
+  practitionerId: string;
+  title: string;
+  category: 'ITA34_OBJECTION' | 'PROVISIONAL_TAX' | 'VAT201_RECONCILIATION' | 'SECTION_12BA_SOLAR' | 'GENERAL_COMPLIANCE' | 'AUDIT_PREPARATION';
+  priority: 'NORMAL' | 'HIGH' | 'STATUTORY_DEADLINE';
+  status: 'OPEN' | 'IN_REVIEW' | 'CLIENT_ACTION_REQUIRED' | 'SIGNED_OFF';
+  lastUpdated: string;
+  unreadCount: number;
+  formalSignOff?: {
+    practitionerName: string;
+    sarsPrNumber: string;
+    signedAt: string;
+    opinionSummary: string;
+    referenceHash: string;
+  };
+}
+
+export interface ConsultationBooking {
+  id: string;
+  practitionerId: string;
+  practitionerName: string;
+  title: string;
+  type: 'PRE_FILING_REVIEW' | 'SARS_AUDIT_DEFENCE' | 'YEAR_END_OPTIMIZATION' | 'QUICK_COMPLIANCE_SYNC';
+  date: string; // YYYY-MM-DD
+  timeSlot: string; // e.g. "10:00 - 10:45 SAST"
+  durationMinutes: number;
+  meetingFormat: 'SECURE_VIDEO' | 'PHONE_CONSULTATION' | 'IN_OFFICE';
+  meetingLink?: string;
+  officeAddress?: string;
+  status: 'CONFIRMED' | 'COMPLETED' | 'RESCHEDULED' | 'CANCELLED';
+  agendaItems: string[];
+  preparedVaultDocuments: string[];
+  notes?: string;
+  createdAt: string;
+}
+
+export interface PractitionerAccessEvent {
+  id: string;
+  practitionerName: string;
+  timestamp: string;
+  action: string;
+  resource: string;
+  ipAddress: string;
+  status: 'PERMITTED' | 'BLOCKED_SCOPE';
+}
+
+export interface CertifiedPractitionerDirectoryEntry {
+  id: string;
+  name: string;
+  firmName: string;
+  sarsPrNumber: string;
+  professionalBody: ProfessionalBody;
+  bodyDesignation: string; // e.g. "Chartered Tax Advisor (SA)", "CA(SA)", "CBA(SA)"
+  specialties: string[];
+  location: string;
+  rating: number;
+  completedReviews: number;
+  hourlyRateZAR: number;
+  avatarInitials: string;
+  isVerifiedSarsPr: boolean;
+}
+
+// ============================================================================
+// EMP501 INTERIM EMPLOYER RECONCILIATION DECLARATION (1 MARCH - 31 AUGUST)
+// In terms of Paragraph 14(3) of the Fourth Schedule to the Income Tax Act 58/1962
+// ============================================================================
+
+export interface Emp201MonthlyRecord {
+  monthKey: '03' | '04' | '05' | '06' | '07' | '08';
+  monthLabel: string; // e.g. 'March 2026'
+  payeDeclared: number; // Source Code 4102
+  sdlDeclared: number; // Source Code 4141
+  uifDeclared: number; // Source Code 4142
+  etiClaimed: number; // Source Code 4118 (Deducted against PAYE)
+  netLiability: number; // (PAYE + SDL + UIF - ETI)
+  paymentMade: number;
+  paymentDate: string;
+  paymentReferenceNumber: string;
+  variance: number; // paymentMade - netLiability
+  status: 'BALANCED' | 'SHORTFALL' | 'OVERPAYMENT';
+}
+
+export interface Irp5CertificateRecord {
+  id: string;
+  certificateNumber: string; // e.g. 'IRP5-2026-001'
+  employeeName: string;
+  employeeIdNumber: string;
+  taxNumber: string;
+  employmentPeriod: string;
+  grossRemuneration: number; // Code 3699
+  payeWithheld: number; // Code 4102
+  uifContribution: number; // Code 4142
+  etiClaimed: number; // Code 4118
+  certificateType: 'IRP5' | 'IT3a';
+  isValidated: boolean;
+}
+
+export interface Emp501InterimDeclaration {
+  id: string;
+  submissionRef: string;
+  employerName: string;
+  tradingName: string;
+  payeReferenceNumber: string; // e.g. '7940182914'
+  uifReferenceNumber: string; // e.g. 'U12089471'
+  sdlReferenceNumber: string; // e.g. 'L40182914'
+  reconciliationPeriod: '202608' | 'INTERIM_2026'; // 1 March to 31 August
+  declarationType: 'INTERIM_RECONCILIATION' | 'ANNUAL_FINAL';
+  totalPayeDeclared: number;
+  totalSdlDeclared: number;
+  totalUifDeclared: number;
+  totalEtiClaimed: number;
+  netTotalLiability: number;
+  totalPaymentsMade: number;
+  totalVariance: number;
+  certificatesCount: number;
+  totalCertificateTaxWithheld: number;
+  certificateVariance: number; // totalPayeDeclared - totalCertificateTaxWithheld
+  status: 'DRAFT' | 'BALANCED_READY' | 'SUBMITTED_CONFIRMED';
+  submittedAt?: string;
+  submittedByRole?: RoleType;
+  sarsReceiptNumber?: string;
+  cryptographicSignature: string;
+  monthlyBreakdown: Emp201MonthlyRecord[];
+  certificates: Irp5CertificateRecord[];
+}
+
+// =========================================================================
+// AI TAX COMPLIANCE CHATBOT ASSISTANT
+// =========================================================================
+export interface AppToolRecommendation {
+  id: string;
+  label: string;
+  description: string;
+  tabKey: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  text: string;
+  timestamp: string;
+  suggestedQuestions?: string[];
+  recommendedAppTools?: AppToolRecommendation[];
+  statutoryReferences?: string[];
+  modelUsed?: string;
+  isStreaming?: boolean;
+}
+
+export interface TaxTopicPrompt {
+  id: string;
+  title: string;
+  category: 'DEDUCTIONS' | 'COMPLIANCE' | 'DISPUTES' | 'VAT' | 'PAYROLL' | 'TOOLS';
+  prompt: string;
+  statutoryRef: string;
+}

@@ -196,9 +196,35 @@ export function generateLiveTaxSnapshot(
     section11gCAllowance = profile.researchEquipmentCost * 0.50;
   }
 
-  // Net Taxable Income (including S13sex, S11D, S24C, S24J, S11(gC), and S10B)
-  const finalCapitalAllowances = capitalAllowances + section13sexAllowance + section11gCAllowance;
-  const finalOperatingExpenses = operatingExpenses + section11dSuperDeduction + section24cDeduction + section24jDeduction + section10bExemption;
+  // Section 12BA: Renewable Energy 125% Super-Allowance (Solar/Wind Generation)
+  let section12BAAllowance = 0;
+  if (profile.is12BAApplied && profile.solarSystemCost && profile.hasSolarCocInVault) {
+    section12BAAllowance = profile.solarSystemCost * 1.25;
+  }
+
+  // Section 12H: Additional Learnership Allowance (SETA registered skills training)
+  let section12HAllowance = 0;
+  if (profile.is12HApplied && profile.hasSetaRegistrationInVault) {
+    const isNqf1to6 = profile.learnershipNqfLevel !== 'NQF 7-10';
+    const baseAllowance = isNqf1to6 ? 40000 : 20000;
+    const disabilityAllowance = isNqf1to6 ? 60000 : 50000;
+
+    const normalLearners = Math.max(0, (profile.learnersCount || 0) - (profile.disabledLearnersCount || 0));
+    const disabledLearners = Math.min(profile.learnersCount || 0, profile.disabledLearnersCount || 0);
+
+    // Annual training allowance
+    const annualDeduction = (normalLearners * baseAllowance) + (disabledLearners * disabilityAllowance);
+    // Completion allowance if successfully completed in current tax year
+    const completionDeduction = profile.isLearnershipCompletedInYear
+      ? (normalLearners * baseAllowance) + (disabledLearners * disabilityAllowance)
+      : 0;
+
+    section12HAllowance = annualDeduction + completionDeduction;
+  }
+
+  // Net Taxable Income (including S13sex, S11D, S24C, S24J, S11(gC), S12BA, S12H, and S10B)
+  const finalCapitalAllowances = capitalAllowances + section13sexAllowance + section11gCAllowance + section12BAAllowance;
+  const finalOperatingExpenses = operatingExpenses + section11dSuperDeduction + section24cDeduction + section24jDeduction + section10bExemption + section12HAllowance;
 
   const totalDeductions = finalOperatingExpenses + allowedRetirementDeduction + finalCapitalAllowances;
   const netTaxableIncome = Math.max(0, grossIncome - totalDeductions);
@@ -236,13 +262,21 @@ export function generateLiveTaxSnapshot(
   // Medical Credits
   const medicalTaxCredits = calculateMedicalTaxCreditsAnnual(profile.medicalAidMembers, rules);
 
+  // Section 6quat Foreign Tax Rebate (Limitation: (Foreign Income / Total Taxable Income) * Normal Tax)
+  let section6quatRebate = 0;
+  if (profile.is6quatApplied && profile.foreignTaxWithheldZAR && netTaxableIncome > 0 && estimatedNormalTax > 0) {
+    const foreignIncome = profile.foreignTaxableIncome || profile.foreignDividendsReceived || 0;
+    const max6quatRebate = (foreignIncome / Math.max(1, netTaxableIncome)) * estimatedNormalTax;
+    section6quatRebate = Math.min(profile.foreignTaxWithheldZAR, max6quatRebate);
+  }
+
   // Provisional Tax Already Paid (Simulated provisional 1st cycle advance)
   const provisionalTaxAlreadyPaid = grossIncome > 50000 ? 5000 : 0;
 
   // Net Tax Liability (Positive owe SARS, Negative safe refund expected)
   const netNormalTaxAfterCredits = isCorporateSme 
-    ? estimatedNormalTax 
-    : Math.max(0, estimatedNormalTax - medicalTaxCredits);
+    ? Math.max(0, estimatedNormalTax - section6quatRebate)
+    : Math.max(0, estimatedNormalTax - medicalTaxCredits - section6quatRebate);
   const netTaxLiabilityOrRefund = netNormalTaxAfterCredits - provisionalTaxAlreadyPaid;
 
   // Net VAT position

@@ -352,10 +352,27 @@ export function processGPSTracks(
   };
 }
 
+export interface LogbookExportMetadata {
+  submissionReference?: string;
+  taxpayerReferenceNumber?: string;
+  userId?: string;
+  userRole?: string;
+  calculationLogicSummary?: string;
+}
+
 /**
  * Formats processed SARS logbook trips into a downloadable CSV string conforming to the standard SARS Template.
  */
-export function generateSARSLogbookCSV(trips: GPSTripOutput[], summary: LogbookSummary): string {
+export function generateSARSLogbookCSV(
+  trips: GPSTripOutput[], 
+  summary: LogbookSummary,
+  metadata?: LogbookExportMetadata
+): string {
+  const submissionRef = metadata?.submissionReference || `SARS-BRS-LOG-${Date.now()}`;
+  const taxpayerRef = metadata?.taxpayerReferenceNumber || '9304318273';
+  const userId = metadata?.userId || 'USR-AUTH-TAX';
+  const userRole = metadata?.userRole || 'Accountant';
+  const logicSummary = metadata?.calculationLogicSummary || 'Section 8(1)(b) Deemed Rate & Section 11(a) Business Mileage Apportionment';
   const headers = [
     'SARS TRIP ID',
     'DATE',
@@ -405,7 +422,11 @@ export function generateSARSLogbookCSV(trips: GPSTripOutput[], summary: LogbookS
   const summaryHeader = [
     '# =====================================================================',
     '# OFFICIAL SARS TRAVEL LOGBOOK EXPORT (SECTION 8(1)(b) COMPLIANT)',
+    `# SARS SUBMISSION REFERENCE: ${submissionRef}`,
+    `# TAXPAYER REFERENCE: ${taxpayerRef}`,
     `# EXPORT TIMESTAMP: ${new Date().toISOString()}`,
+    `# GENERATING USER ID: ${userId} (${userRole})`,
+    `# CALCULATION LOGIC: ${logicSummary}`,
     `# TOTAL LOGGED KILOMETERS: ${summary.total_distance_km} km`,
     `# TOTAL BUSINESS KILOMETERS: ${summary.total_business_km} km`,
     `# BUSINESS RATIO: ${summary.business_percentage}%`,

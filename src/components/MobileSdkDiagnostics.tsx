@@ -8,8 +8,10 @@ import {
   Layers, 
   Terminal,
   Zap,
-  Globe
+  Globe,
+  Download
 } from 'lucide-react';
+import { downloadBlobFile } from '../utils/systemBridge';
 
 interface MobileSdkDiagnosticsProps {
   showBanner?: (msg: string) => void;
@@ -80,6 +82,14 @@ export function TaxOverviewScreen() {
     setCopiedSdk(true);
     if (showBanner) showBanner('📋 Mobile SDK snippet copied to clipboard!');
     setTimeout(() => setCopiedSdk(false), 2000);
+  };
+
+  const handleDownloadSdkFile = () => {
+    const ext = activeSdkLanguage === 'flutter' ? 'dart' : 'tsx';
+    const filename = `ZAtaxMobileSdk_${activeSdkLanguage}.${ext}`;
+    const code = activeSdkLanguage === 'flutter' ? flutterCode : reactNativeCode;
+    downloadBlobFile(filename, code, 'text/plain;charset=utf-8');
+    if (showBanner) showBanner(`📥 Downloaded ${filename}`);
   };
 
   return (
@@ -171,13 +181,23 @@ export function TaxOverviewScreen() {
           <pre className="p-4 bg-black/60 rounded-2xl text-[11px] font-mono text-emerald-300 overflow-x-auto border border-white/5 leading-relaxed">
             {activeSdkLanguage === 'flutter' ? flutterCode : reactNativeCode}
           </pre>
-          <button
-            onClick={() => handleCopyCode(activeSdkLanguage === 'flutter' ? flutterCode : reactNativeCode)}
-            className="absolute top-3 right-3 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
-          >
-            {copiedSdk ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copiedSdk ? 'Copied' : 'Copy'}</span>
-          </button>
+          <div className="absolute top-3 right-3 flex items-center gap-2">
+            <button
+              onClick={handleDownloadSdkFile}
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+              title="Download native mobile SDK code file"
+            >
+              <Download className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Download</span>
+            </button>
+            <button
+              onClick={() => handleCopyCode(activeSdkLanguage === 'flutter' ? flutterCode : reactNativeCode)}
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+            >
+              {copiedSdk ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedSdk ? 'Copied' : 'Copy'}</span>
+            </button>
+          </div>
         </div>
       </div>
 

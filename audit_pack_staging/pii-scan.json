@@ -1,6 +1,27 @@
 {
-  "filesScanned": 53,
-  "kbParsed": 1490.2,
-  "durationMs": 90,
-  "hits": []
+  "filesScanned": 83,
+  "kbParsed": 2111.6,
+  "durationMs": 147,
+  "hits": [
+    {
+      "file": "src/components/SarsSandboxReadinessHub.tsx",
+      "line": 286,
+      "type": "UNENCRYPTED_13_DIGIT_ID"
+    },
+    {
+      "file": "src/data/mockData.ts",
+      "line": 22,
+      "type": "UNENCRYPTED_13_DIGIT_ID"
+    },
+    {
+      "file": "scripts/stressTest.ts",
+      "line": 97,
+      "type": "UNENCRYPTED_13_DIGIT_ID"
+    },
+    {
+      "file": "scripts/stressTest.ts",
+      "line": 421,
+      "type": "UNENCRYPTED_13_DIGIT_ID"
+    }
+  ]
 }

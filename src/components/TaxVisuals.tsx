@@ -1,7 +1,21 @@
 import React, { useMemo, useState } from 'react';
-import { TrendingUp, FileText, PieChart as PieIcon, DollarSign, ArrowUpRight, ArrowDownRight, Info, ShieldCheck } from 'lucide-react';
+import { 
+  TrendingUp, 
+  FileText, 
+  PieChart as PieIcon, 
+  DollarSign, 
+  ArrowUpRight, 
+  ArrowDownRight, 
+  Info, 
+  ShieldCheck,
+  Download,
+  X,
+  Printer
+} from 'lucide-react';
 import { TaxTransaction, InvoiceRecord, UserTaxProfile, TaxCycleSnapshot } from '../types';
 import { formatZAR, generateLiveTaxSnapshot } from '../utils/taxCalculations';
+import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
+import TaxReportPDF from './TaxReportPDF';
 
 interface TaxVisualsProps {
   transactions: TaxTransaction[];
@@ -373,6 +387,52 @@ export default function TaxVisuals({ transactions, invoices, profile, snapshot }
     ];
   }, [transactions, invoices]);
 
+  const [showPdfReport, setShowPdfReport] = useState<boolean>(false);
+
+  const handleDownloadStatementSummary = () => {
+    const timestamp = new Date().toISOString();
+    const submissionRef = generateSubmissionRef('SARS-STATEMENT');
+    const companyName = profile?.name || 'Ilitha Fintech Operations (Pty) Ltd';
+    const taxNumber = profile?.sarsTaxNumber || '9304318273';
+
+    const content = [
+      '=========================================================================',
+      'REPUBLIC OF SOUTH AFRICA - SOUTH AFRICAN REVENUE SERVICE',
+      'ANNUAL TAX POSITION & FINANCIAL INTELLIGENCE STATEMENT',
+      `STATEMENT REFERENCE: ${submissionRef}`,
+      `ENTITY: ${companyName} [Tax Ref: ${taxNumber}]`,
+      `TIMESTAMP: ${timestamp}`,
+      '=========================================================================',
+      '',
+      '1. CORE TAX METRICS SUMMARY:',
+      `   Gross Income: ${formatZAR(snapshot.grossIncome)}`,
+      `   Taxable Income: ${formatZAR(snapshot.netTaxableIncome)}`,
+      `   Estimated Normal Tax: ${formatZAR(snapshot.estimatedNormalTax)}`,
+      `   Provisional Tax Paid: ${formatZAR(snapshot.provisionalTaxAlreadyPaid)}`,
+      `   Medical Tax Credits: ${formatZAR(snapshot.medicalTaxCredits)}`,
+      `   Net Tax Outstanding / (Refund): ${formatZAR(snapshot.netTaxLiabilityOrRefund)}`,
+      '',
+      '2. VAT-201 METRICS SUMMARY:',
+      `   VAT Status: ${profile.vatRegistered ? 'VAT Registered Entity (15%)' : 'Non-VAT Vendor'}`,
+      `   Output VAT Collected: ${formatZAR(snapshot.outputVatCollected)}`,
+      `   Input VAT Claimed: ${formatZAR(snapshot.inputVatClaimable)}`,
+      `   Net VAT Payable / (Refund): ${formatZAR(snapshot.netVatDueOrRefund)}`,
+      '',
+      '3. EXPENSE DEDUCTIONS BY CATEGORY:',
+      ...categoryData.map(c => `   - ${c.name}: ${formatZAR(c.value)}`),
+      `   TOTAL OPERATING DEDUCTIONS: ${formatZAR(totalCategorySpending)}`,
+      '',
+      '=========================================================================',
+      'PREPARED BY: ZAtax Compliance Advisor • Live Intelligence Engine'
+    ].join('\n');
+
+    downloadBlobFile(
+      `SARS_Tax_Statement_${submissionRef}.txt`,
+      content,
+      'text/plain;charset=utf-8;'
+    );
+  };
+
   return (
     <div className="space-y-6" id="tax-visuals-panel">
       {/* Visual Analytics Banner */}
@@ -385,9 +445,21 @@ export default function TaxVisuals({ transactions, invoices, profile, snapshot }
             Real-time interactive graphs mapping your current active financial ledger. Compare claims, explore categories, and visualize provisional timelines under 2025/2026 tax brackets.
           </p>
         </div>
-        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-1.5 flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span className="text-[10px] font-mono text-emerald-300 uppercase font-bold tracking-wider">Secure Native Engine</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-1.5 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span className="text-[10px] font-mono text-emerald-300 uppercase font-bold tracking-wider">Secure Native Engine</span>
+          </div>
+
+          <button
+            onClick={() => setShowPdfReport(true)}
+            className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
+            id="view-full-tax-pdf-report-btn"
+            title="Open printable/exportable full tax statement and visual report"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Generate Full Tax Report (PDF)</span>
+          </button>
         </div>
       </div>
 
@@ -546,6 +618,70 @@ export default function TaxVisuals({ transactions, invoices, profile, snapshot }
         </div>
 
       </div>
+
+      {/* FULL TAX STATEMENT & VISUAL REPORT MODAL */}
+      {showPdfReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fadeIn" id="tax-pdf-report-modal">
+          <div className="bg-[#090f1d] border border-cyan-500/30 rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            
+            {/* MODAL HEADER */}
+            <div className="p-4 sm:p-5 border-b border-white/10 flex justify-between items-center bg-slate-950/70">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>SARS Annual Tax Statement & PDF Report</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                      PRINT & EXPORT READY
+                    </span>
+                  </h3>
+                  <p className="text-xs text-white/50">Comprehensive financial trajectory, deductions breakdown, and live tax liability snapshot</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadStatementSummary}
+                  className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  title="Download raw statement summary text file"
+                >
+                  <Download className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Download Summary</span>
+                </button>
+
+                <button
+                  onClick={() => window.print()}
+                  className="px-3.5 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-cyan-500/20"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print PDF</span>
+                </button>
+
+                <button
+                  onClick={() => setShowPdfReport(false)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition cursor-pointer"
+                  id="close-tax-pdf-report-btn"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* MODAL CONTENT: TaxReportPDF */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
+              <TaxReportPDF
+                transactions={transactions}
+                invoices={invoices}
+                profile={profile}
+                snapshot={snapshot}
+              />
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,9 +7,11 @@ import {
   HelpCircle, 
   Building2, 
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  Download
 } from 'lucide-react';
 import { EntityProfile } from '../types';
+import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
 
 interface SbcAdvisoryWizardProps {
   profile: EntityProfile;
@@ -65,6 +67,57 @@ export const SbcAdvisoryWizard: React.FC<SbcAdvisoryWizardProps> = ({
     }
     if (showBanner) {
       showBanner(`✨ Section 12E SBC Restructuring Saved ${formatZAR(sbcNetSavings)} in corporate tax!`);
+    }
+  };
+
+  const handleDownloadSbcBrief = () => {
+    const timestamp = new Date().toISOString();
+    const submissionRef = generateSubmissionRef('SARS-SBC');
+    const taxpayerName = profile.profile?.name || 'Ilitha Fintech Operations (Pty) Ltd';
+    const taxNumber = profile.profile?.sarsTaxNumber || '9304318273';
+
+    const content = [
+      '# =====================================================================',
+      '# REPUBLIC OF SOUTH AFRICA - INCOME TAX ACT 58 OF 1962',
+      '# SECTION 12E SMALL BUSINESS CORPORATION (SBC) ADVISORY OPINION BRIEF',
+      `# REFERENCE: ${submissionRef}`,
+      `# TAXPAYER ENTITY: ${taxpayerName} [Tax Ref: ${taxNumber}]`,
+      `# DATE: ${timestamp}`,
+      `# GROSS INCOME ASSESSED: ${formatZAR(sbcGrossIncome)}`,
+      '# =====================================================================',
+      '',
+      '1. STATUTORY ELIGIBILITY ASSESSMENT (§12E(4)):',
+      `- Turnover Test (Cap <= R20,000,000): ${qualifiesUnderCap ? 'QUALIFIED' : 'DISQUALIFIED'} (${formatZAR(sbcGrossIncome)})`,
+      `- Shareholder Test (Natural Persons Only): ${qualifiesShareholders ? 'QUALIFIED' : 'DISQUALIFIED'}`,
+      `- Passive & Investment Income Ratio (<= 20%): ${qualifiesPassive ? 'QUALIFIED' : 'DISQUALIFIED'} (${passiveIncomeRatio}%)`,
+      `- Personal Service Provider Exemption (>= 3 Full-Time Employees): ${qualifiesService ? 'QUALIFIED' : 'DISQUALIFIED'} (${fullTimeEmployees} Employees)`,
+      `- Overall Section 12E Status: ${isEligible ? 'CONFIRMED ELIGIBLE' : 'INELIGIBLE'}`,
+      '',
+      '2. PROGRESSIVE CORPORATE TAX CALCULATION:',
+      `- Standard Corporate Tax (Flat 27%): ${formatZAR(standardCorporateTax)}`,
+      `- Section 12E Progressive Sliding Scale Tax: ${formatZAR(sbcTaxValue)}`,
+      `- Net Annual Retained Working Capital: ${formatZAR(sbcNetSavings)}`,
+      '',
+      '3. ACCELERATED DEPRECIATION ALLOWANCES UNLOCKED:',
+      `- Section 12E(1): 100% Upfront Write-Off on Manufacturing Plant & Machinery in Year 1.`,
+      `- Section 12E(1A): Accelerated 50% (Year 1) / 30% (Year 2) / 20% (Year 3) write-off on other qualifying capital assets.`,
+      '',
+      '=====================================================================',
+      'PREPARED BY: ZAtax Compliance Advisor • Statutory Advisory Division',
+      'COMPLIANCE STATUS: READY FOR PROVISIONAL TAX IRP6 & ITR14 INTEGRATION'
+    ].join('\n');
+
+    downloadBlobFile(
+      `SARS_Section12E_SBC_Advisory_${submissionRef}.txt`,
+      content,
+      'text/plain;charset=utf-8;'
+    );
+
+    if (addAuditLog) {
+      addAuditLog('SBC_ADVISORY_BRIEF_DOWNLOADED', `Exported Section 12E SBC Advisory Brief (${submissionRef}) saving ${formatZAR(sbcNetSavings)} in corporate tax.`);
+    }
+    if (showBanner) {
+      showBanner(`📥 Section 12E SBC Advisory Brief (${submissionRef}) downloaded!`);
     }
   };
 
@@ -192,13 +245,25 @@ export const SbcAdvisoryWizard: React.FC<SbcAdvisoryWizardProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={handleApplySbcRestructuring}
-            className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>Apply Section 12E SBC Optimization</span>
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            <button
+              onClick={handleApplySbcRestructuring}
+              className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Apply Section 12E SBC Optimization</span>
+            </button>
+
+            <button
+              onClick={handleDownloadSbcBrief}
+              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-white/15"
+              id="download-sbc-brief-btn"
+              title="Download formal Section 12E SBC Tax Advisory Opinion Brief"
+            >
+              <Download className="w-4 h-4 text-cyan-400" />
+              <span>Download Brief</span>
+            </button>
+          </div>
         </div>
 
       </div>

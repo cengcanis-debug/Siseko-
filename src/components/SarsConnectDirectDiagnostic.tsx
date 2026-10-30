@@ -24,9 +24,12 @@ import {
   Network,
   FileCode,
   Key,
-  Layers
+  Layers,
+  Download
 } from 'lucide-react';
 import { UserTaxProfile, RoleType } from '../types';
+import { SarsSterlingTradeTestingPanel } from './SarsSterlingTradeTestingPanel';
+import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
 
 interface SarsConnectDirectDiagnosticProps {
   profile?: UserTaxProfile;
@@ -83,8 +86,8 @@ export const SarsConnectDirectDiagnostic: React.FC<SarsConnectDirectDiagnosticPr
     gatewayMode === 'Production Live' ||
     (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SARS_MODE === 'production');
 
-  // Protocol mode: TCP Socket (Connect:Direct) vs HTTPS REST Ingress (v3 API)
-  const [protocolMode, setProtocolMode] = useState<'REST_V3' | 'CONNECT_DIRECT'>('REST_V3');
+  // Protocol mode: TCP Socket (Connect:Direct) vs HTTPS REST Ingress (v3 API) vs Sterling File Gateway (HTTPS)
+  const [protocolMode, setProtocolMode] = useState<'REST_V3' | 'CONNECT_DIRECT' | 'STERLING_HTTPS'>('REST_V3');
 
   // TCP Socket parameters
   const [host, setHost] = useState<string>('sars-edi-gateway.govtech.internal');
@@ -298,6 +301,7 @@ We have initiated connectivity diagnostics to:
 - eFiling REST Ingress: /api/sars-gateway/v3 (Proxying efiling-staging.sars.gov.za - ENOTFOUND is EXPECTED via GovTech isolation)
 - Source Organization: ${profile?.name || 'Ilitha Fintech Operations (Pty) Ltd'}
 - Registered CIPC / Practice: 2026/707498/07 / PR-0098412
+- SARS Income Tax Reference: 9304318273
 - Director: V Zenzile | Lead Developer: S Cengcani
 - Registered Address: 6787 Unique Homes, Mangaung, Bloemfontein 9301
 - Technical Officer: ${profile?.email || 'cengcanis@gmail.com'}
@@ -338,6 +342,59 @@ print("Status:", response.status_code)
 print("Payload:", response.json())
 `;
 
+  const handleDownloadEdiReport = () => {
+    if (currentUserRole && currentUserRole !== 'Owner' && currentUserRole !== 'Accountant' && currentUserRole !== 'Auditor') {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot export EDI diagnostic reports.`);
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const submissionRef = generateSubmissionRef('SARS-EDI');
+
+    const content = [
+      '=========================================================================',
+      'REPUBLIC OF SOUTH AFRICA - SOUTH AFRICAN REVENUE SERVICE',
+      'SECURE INGRESS & CONNECT:DIRECT EDI PORT 1364 DIAGNOSTIC REPORT',
+      `REPORT REFERENCE: ${submissionRef}`,
+      `ENTITY: ${profile?.name || 'Ilitha Fintech Operations (Pty) Ltd'} [Tax Ref: ${profile?.sarsTaxNumber || '9304318273'}]`,
+      `TIMESTAMP: ${timestamp}`,
+      '=========================================================================',
+      '',
+      '1. TCP CONNECT:DIRECT EDI NODE STATUS:',
+      `   Target Host: ${host}`,
+      `   Target Port: ${port}`,
+      `   Reachable: ${socketResult?.reachable ? 'CONNECTED' : 'STAGING SIMULATED / BLOCKED'}`,
+      `   Latency: ${socketResult?.latencyMs || 0}ms`,
+      `   Node Identity: ${socketResult?.nodeIdentity || 'sarsqa'}`,
+      `   Message: ${socketResult?.message || 'Ready for test probe'}`,
+      '',
+      '2. REST v3 INGRESS ENDPOINT STATUS:',
+      `   Target URL: ${targetUrl}`,
+      `   Status: ${httpResult?.statusText || 'GovTech Private Ingress Ready'}`,
+      `   DNS Status: ${httpResult?.dnsStatus || 'RESOLVED'}`,
+      `   Latency: ${httpResult?.latencyMs || 0}ms`,
+      '',
+      '3. PRE-DRAFTED FORMAL ONBOARDING EMAIL:',
+      emailBody,
+      '',
+      '=========================================================================',
+      'PREPARED BY: ZAtax Compliance Advisor • GovTech Protocol Diagnostic'
+    ].join('\n');
+
+    downloadBlobFile(
+      `SARS_EDI_ConnectDirect_Report_${submissionRef}.txt`,
+      content,
+      'text/plain;charset=utf-8;'
+    );
+
+    addAuditLog(
+      'SARS_EDI_DIAGNOSTIC_DOWNLOADED',
+      `Exported Connect:Direct EDI & REST Ingress Diagnostic Report (${submissionRef}).`,
+      'info'
+    );
+    showBanner(`📥 EDI Diagnostic Report (${submissionRef}) downloaded!`);
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn" id="sars-connect-direct-diagnostic-section">
       
@@ -364,13 +421,23 @@ print("Payload:", response.json())
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setShowEmailTemplate(!showEmailTemplate)}
               className="px-3 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Mail className="w-3.5 h-3.5 text-indigo-300" />
               <span>{showEmailTemplate ? 'Hide Email Template' : 'SPS Ingress Email'}</span>
+            </button>
+
+            <button
+              onClick={handleDownloadEdiReport}
+              className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white border border-white/15 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
+              id="download-edi-diagnostic-btn"
+              title="Download Connect:Direct EDI Port 1364 & REST Ingress Diagnostic Report"
+            >
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Download Report</span>
             </button>
           </div>
         </div>
@@ -400,7 +467,19 @@ print("Payload:", response.json())
             }`}
           >
             <Terminal className="w-3.5 h-3.5 text-emerald-300" />
-            <span>Connect:Direct TCP EDI Node (Port 1364)</span>
+            <span>Connect:Direct TCP EDI (Port 1364)</span>
+          </button>
+
+          <button
+            onClick={() => setProtocolMode('STERLING_HTTPS')}
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              protocolMode === 'STERLING_HTTPS'
+                ? 'bg-gradient-to-r from-amber-600 to-indigo-600 text-white shadow-lg shadow-amber-500/20'
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Key className="w-3.5 h-3.5 text-amber-300" />
+            <span>Sterling File Gateway (HTTPS) & Appendix B</span>
           </button>
         </div>
 
@@ -1137,6 +1216,17 @@ print("Payload:", response.json())
 
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODE 3: STERLING FILE GATEWAY (HTTPS) & APPENDIX B ENROLMENT */}
+      {/* ========================================================================= */}
+      {protocolMode === 'STERLING_HTTPS' && (
+        <SarsSterlingTradeTestingPanel
+          currentUserRole={currentUserRole}
+          addAuditLog={addAuditLog}
+          showBanner={showBanner}
+        />
       )}
 
       {/* COLLAPSIBLE EMAIL DOSSIER TEMPLATE */}

@@ -481,18 +481,26 @@ export default function TaxReportPDF({ transactions, invoices, profile, snapshot
                 </tr>
               </thead>
               <tbody>
-                {transactions.slice(0, 8).map((tx) => (
-                  <tr key={tx.id} className="border-b border-white/5 text-[9px]">
-                    <td className="px-3 py-1 text-white/60 font-mono">{tx.date}</td>
-                    <td className="px-3 py-1 font-bold truncate max-w-[155px] text-white">{tx.description}</td>
-                    <td className="px-3 py-1 text-white/50">{tx.category}</td>
-                    <td className="px-3 py-1 text-right font-mono font-semibold text-white">{formatZAR(tx.amount)}</td>
-                    <td className="px-3 py-1 text-right font-mono text-white/50">{tx.vatIncluded ? formatZAR(tx.vatAmount) : 'R0.00'}</td>
-                    <td className="px-3 py-1 text-right font-mono font-bold text-emerald-400">
-                      {tx.taxPositionImpactZAR < 0 ? `- ${formatZAR(Math.abs(tx.taxPositionImpactZAR))}` : `+ ${formatZAR(tx.taxPositionImpactZAR)}`}
+                {transactions.length === 0 ? (
+                  <tr key="no-tx-pdf">
+                    <td colSpan={6} className="px-3 py-3 text-center text-white/40 text-[9px]">
+                      No transactions recorded in ledger.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  transactions.slice(0, 8).map((tx) => (
+                    <tr key={tx.id} className="border-b border-white/5 text-[9px]">
+                      <td className="px-3 py-1 text-white/60 font-mono">{tx.date}</td>
+                      <td className="px-3 py-1 font-bold truncate max-w-[155px] text-white">{tx.description}</td>
+                      <td className="px-3 py-1 text-white/50">{tx.category}</td>
+                      <td className="px-3 py-1 text-right font-mono font-semibold text-white">{formatZAR(tx.amount)}</td>
+                      <td className="px-3 py-1 text-right font-mono text-white/50">{tx.vatIncluded ? formatZAR(tx.vatAmount) : 'R0.00'}</td>
+                      <td className="px-3 py-1 text-right font-mono font-bold text-emerald-400">
+                        {tx.taxPositionImpactZAR < 0 ? `- ${formatZAR(Math.abs(tx.taxPositionImpactZAR))}` : `+ ${formatZAR(tx.taxPositionImpactZAR)}`}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

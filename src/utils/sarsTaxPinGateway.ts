@@ -5,7 +5,7 @@
  */
 
 export interface SarsTaxPinVerificationRequest {
-  taxpayerReferenceNumber: string; // 10-digit SARS Tax Reference Number (e.g. 9812490123)
+  taxpayerReferenceNumber: string; // 10-digit SARS Tax Reference Number (e.g. 9304318273)
   taxPin: string; // 8-character or 10-character alphanumeric PIN issued by SARS (e.g. 9821A849X0)
   requestingEntity: {
     entityName: string;

@@ -90,8 +90,8 @@ export function createSession(params: {
     token,
     role: params.role,
     userId: params.userId || `usr-${params.role.toLowerCase()}`,
-    userName: params.userName || 'Sipho Ndlalose',
-    userEmail: params.userEmail || 'sipho@ndlaloseconsulting.co.za',
+    userName: params.userName || 'V Zenzile',
+    userEmail: params.userEmail || 'vzenzile@ilithafintech.co.za',
     ipAddress: params.ipAddress || `197.185.${Math.floor(Math.random() * 254)}.${Math.floor(Math.random() * 254)}`,
     createdAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
@@ -185,4 +185,34 @@ export function retrievePersistedSession(): AppSession | null {
     console.warn('Unable to read persisted session:', err);
   }
   return null;
+}
+
+export function createDefaultSession(role: RoleType = 'Owner'): AppSession {
+  return createSession({ role });
+}
+
+export function isRoleAuthorized(role: RoleType, permissionOrScope: string): boolean {
+  switch (permissionOrScope) {
+    case 'canEditTransactions':
+      return role === 'Owner' || role === 'Accountant' || role === 'Bookkeeper';
+    case 'canDeleteTransactions':
+      return role === 'Owner' || role === 'Accountant';
+    case 'canScanInvoices':
+      return role === 'Owner' || role === 'Accountant' || role === 'Bookkeeper';
+    case 'canApproveInvoices':
+      return role === 'Owner' || role === 'Accountant';
+    case 'canAccessTaxProjections':
+      return true; // All roles can inspect tax projections
+    case 'canDownloadLedger':
+    case 'canDownloadLedgerCSV':
+      return role === 'Owner' || role === 'Accountant' || role === 'Auditor';
+    case 'canFileSARS':
+      return role === 'Owner' || role === 'Accountant';
+    case 'canDraftObjection':
+      return role === 'Owner' || role === 'Accountant';
+    default: {
+      const scopes = getRoleScopes(role);
+      return scopes.includes(permissionOrScope);
+    }
+  }
 }

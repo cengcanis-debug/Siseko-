@@ -11,9 +11,11 @@ import {
   Unlock, 
   Sparkles,
   ArrowRight,
-  Info
+  Info,
+  Download
 } from 'lucide-react';
 import { EntityProfile } from '../types';
+import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
 
 interface TwoPotRetirementSimulatorProps {
   profile: EntityProfile;
@@ -65,6 +67,52 @@ export const TwoPotRetirementSimulator: React.FC<TwoPotRetirementSimulatorProps>
       `Simulated Savings Pot withdrawal of ${formatZAR(clampedWithdrawal)}. Marginal Tax (SARS): ${formatZAR(sarsMarginalTaxDeduction)}. Opportunity cost at retirement: ${formatZAR(futureCompoundValue)}.`
     );
     showBanner(`💡 Two-Pot Simulation: Net cash ${formatZAR(netCashInPocket)} after ${taxpayerMarginalRate}% marginal tax.`);
+  };
+
+  const handleDownloadTwoPotReport = () => {
+    const timestamp = new Date().toISOString();
+    const submissionRef = generateSubmissionRef('SARS-TWOPOT');
+    const taxpayerName = profile.profile?.name || 'Ilitha Fintech Operations (Pty) Ltd';
+    const taxNumber = profile.profile?.sarsTaxNumber || '9304318273';
+
+    const content = [
+      '# =====================================================================',
+      '# REPUBLIC OF SOUTH AFRICA - REVENUE LAWS AMENDMENT ACT',
+      '# TWO-POT RETIREMENT SYSTEM TAX SIMULATION & CAPITAL PRESERVATION REPORT',
+      `# REFERENCE: ${submissionRef}`,
+      `# TAXPAYER: ${taxpayerName} [Tax Ref: ${taxNumber}]`,
+      `# DATE: ${timestamp}`,
+      '# =====================================================================',
+      '',
+      '1. TOTAL RETIREMENT FUND ALLOCATION:',
+      `- Total Accumulated Fund Value: ${formatZAR(totalFundValue)}`,
+      `- Vested Pot (Pre-1 Sept 2024 Legacy Assets): ${formatZAR(vestedPotValue)} (Protected under historic rules)`,
+      `- Savings Pot (1/3 Active Savings + Initial Seeding): ${formatZAR(savingsPotValue)} (Accessible pre-retirement once per tax year, min R2,000)`,
+      `- Retirement Pot (2/3 Active Savings): ${formatZAR(retirementPotValue)} (Strictly locked until age 55+)`,
+      '',
+      '2. SIMULATED PRE-RETIREMENT WITHDRAWAL IMPACT:',
+      `- Requested Gross Withdrawal: ${formatZAR(clampedWithdrawal)}`,
+      `- Taxpayer Marginal Tax Bracket: ${taxpayerMarginalRate}%`,
+      `- Estimated SARS Electronic Tax Directive Withholding: ${formatZAR(sarsMarginalTaxDeduction)}`,
+      `- Net Cash Available in Pocket: ${formatZAR(netCashInPocket)}`,
+      '',
+      '3. LONG-TERM COMPOUND OPPORTUNITY COST:',
+      `- Projected Value at Retirement (${yearsToRetirement} years @ ${assumedAnnualReturn}% growth): ${formatZAR(futureCompoundValue)}`,
+      `- Forfeited Tax-Free Compounding Wealth: ${formatZAR(lostRetirementWealth)}`,
+      '',
+      '=====================================================================',
+      'PREPARED BY: ZAtax Compliance Advisor • Retirement Planning Engine',
+      'REGULATORY COMPLIANCE: SARS ELECTRONIC TAX DIRECTIVE INTEGRATION ACTIVE'
+    ].join('\n');
+
+    downloadBlobFile(
+      `SARS_TwoPot_Simulation_${submissionRef}.txt`,
+      content,
+      'text/plain;charset=utf-8;'
+    );
+
+    addAuditLog('TWO_POT_REPORT_DOWNLOADED', `Exported Two-Pot Retirement Simulation Report (${submissionRef}) for ${taxpayerName}.`);
+    showBanner(`📥 Two-Pot Tax Simulation Report (${submissionRef}) downloaded!`);
   };
 
   return (
@@ -204,13 +252,25 @@ export const TwoPotRetirementSimulator: React.FC<TwoPotRetirementSimulatorProps>
               </div>
             </div>
 
-            <button
-              onClick={handleSimulateWithdrawal}
-              className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Simulate SARS Directive & Tax Liability</span>
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <button
+                onClick={handleSimulateWithdrawal}
+                className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Simulate Directive</span>
+              </button>
+
+              <button
+                onClick={handleDownloadTwoPotReport}
+                className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-white/15"
+                id="download-twopot-report-btn"
+                title="Download formal Two-Pot Retirement Simulation & Capital Preservation Report"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Export Report</span>
+              </button>
+            </div>
           </div>
         </div>
 

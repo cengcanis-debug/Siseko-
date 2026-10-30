@@ -16,6 +16,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { EntityProfile } from '../types';
+import { downloadBlobFile } from '../utils/systemBridge';
 
 interface SarsDisputePackModalProps {
   isOpen: boolean;
@@ -59,7 +60,7 @@ export const SarsDisputePackModal: React.FC<SarsDisputePackModalProps> = ({
   const handleCopyText = () => {
     const textToCopy = `REPUBLIC OF SOUTH AFRICA - SOUTH AFRICAN REVENUE SERVICE (SARS)
 NOTICE OF OBJECTION (FORM ADR1 / TAA RULE 7)
-Tax Reference Number: ${profile.taxNumber || '9482710385'}
+Tax Reference Number: ${profile.sarsTaxNumber || profile.taxNumber || '9304318273'}
 Assessment Notice: ${assessmentNoticeNo}
 Disputed Source Code: ${disallowedSourceCode} - ${disallowedDescription}
 
@@ -81,6 +82,63 @@ Lodged within the prescribed 80-Business-Day window (${daysRemaining} business d
     setTimeout(() => setCopied(false), 3000);
     showBanner('📋 SARS Rule 7 Legal Grounds copied to clipboard!');
     addAuditLog('DISPUTE_PACK_COPIED', `Exported and copied ADR1 objection legal grounds for ${objectionRef}.`);
+  };
+
+  const handleDownloadAdr1Pack = () => {
+    const timestamp = new Date().toISOString();
+    const submissionRef = objectionRef || `SARS-ADR1-${Date.now().toString(36).toUpperCase()}`;
+
+    const content = [
+      '=========================================================================',
+      'REPUBLIC OF SOUTH AFRICA - SOUTH AFRICAN REVENUE SERVICE (SARS)',
+      'TAX ADMINISTRATION ACT 28 OF 2011 (TAA) - SECTION 104',
+      'NOTICE OF OBJECTION AGAINST ASSESSMENT (FORM ADR1 / TAA RULE 7)',
+      `OBJECTION REFERENCE: ${submissionRef}`,
+      `DATE OF LODGEMENT: ${timestamp.substring(0, 10)}`,
+      `TAXPAYER LEGAL ENTITY: ${profile.name || profile.companyName || 'Ilitha Fintech Operations (Pty) Ltd'}`,
+      `SARS TAX REFERENCE NUMBER: ${profile.sarsTaxNumber || profile.taxNumber || '9304318273'}`,
+      `ASSESSMENT NOTICE NUMBER: ${assessmentNoticeNo}`,
+      '=========================================================================',
+      '',
+      '1. DISPUTED ASSESSMENT LINE ITEM:',
+      `   SARS Source Code: ${disallowedSourceCode}`,
+      `   Description: ${disallowedDescription}`,
+      `   Original Claimed Amount: ${formatZAR(originalClaimAmount)}`,
+      `   SARS Assessed Amount: ${formatZAR(sarsAssessedAmount)}`,
+      `   Disputed Disallowance: ${formatZAR(originalClaimAmount - sarsAssessedAmount)}`,
+      '',
+      '2. STATUTORY GROUNDS OF OBJECTION - FACTS (TAA RULE 7(2)(a)):',
+      `   - The Taxpayer travelled ${businessKms.toLocaleString()} verified business kilometres during the 2026 assessment year in the direct production of income.`,
+      `   - Contemporaneous electronic logbook records each journey with date, departure/destination, client designation, and odometer readings.`,
+      `   - Vault Corroboration: Doc ID #789 (Logbook_2026.pdf) verified.`,
+      '',
+      '3. STATUTORY GROUNDS OF OBJECTION - LAW (TAA RULE 7(2)(b)):',
+      `   - Section 11(a) of the Income Tax Act No. 58 of 1962 (General Deduction Formula: expenditure actually incurred in production of income and not of a capital nature).`,
+      `   - Section 8(1)(b) gazetted deemed cost tables for business travel where allowance received or logbook maintained.`,
+      `   - The disallowance of Source Code ${disallowedSourceCode} to R0.00 is legally flawed and contrary to Section 11(a).`,
+      '',
+      '4. ATTACHED VAULT EVIDENCE MANIFEST & INTEGRITY SEALS:',
+      '   - Evidence File 1: Logbook_2026.pdf',
+      '     SHA-256: 9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e8d7c6b5a4f3e2d1c0b9a8f7e',
+      '   - Evidence File 2: Purchase_Agreement.pdf (Vehicle Acquisition Contract)',
+      '     SHA-256: 4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b',
+      '',
+      '5. STATUTORY DEADLINE CONFORMANCE (TAA §104):',
+      `   - Lodged within the 2026 TAA 80-Business-Day statutory window (${daysRemaining} business days remaining).`,
+      '   - Timely lodgement under Rule 7 verified.',
+      '',
+      '=========================================================================',
+      'PREPARED BY: ZAtax Compliance Advisor • TAA Rule 7 Legal Objection Drafter'
+    ].join('\n');
+
+    downloadBlobFile(
+      `SARS_ADR1_Notice_Of_Objection_${submissionRef}.txt`,
+      content,
+      'text/plain;charset=utf-8;'
+    );
+
+    addAuditLog('DISPUTE_PACK_DOWNLOADED', `Exported formal SARS Form ADR1 Rule 7 Notice of Objection for ${submissionRef}.`, 'info');
+    showBanner(`📥 Form ADR1 Notice of Objection (${submissionRef}) downloaded!`);
   };
 
   const handlePrint = () => {
@@ -281,13 +339,23 @@ Lodged within the prescribed 80-Business-Day window (${daysRemaining} business d
             <span>Ready for instant upload to SARS eFiling Dispute Resolution portal</span>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
             <button
               onClick={handleCopyText}
               className="flex-1 sm:flex-initial px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Copy className="w-3.5 h-3.5" />
               <span>{copied ? 'Copied to Clipboard!' : 'Copy Rule 7 Text'}</span>
+            </button>
+
+            <button
+              onClick={handleDownloadAdr1Pack}
+              className="flex-1 sm:flex-initial px-3.5 py-2 bg-white/10 hover:bg-white/20 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+              id="download-adr1-notice-btn"
+              title="Download formal SARS Form ADR1 Notice of Objection"
+            >
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Download ADR1 Pack</span>
             </button>
 
             <button

@@ -41,6 +41,8 @@ import {
   generateX509MetadataForCert
 } from '../utils/sandboxStagesAndCertificates';
 import { RoleType } from '../types';
+import { downloadBlobFile } from '../utils/systemBridge';
+import { sarsApiService } from '../services/sarsApiService';
 import { X509CertificateInspectorModal } from './X509CertificateInspectorModal';
 import { ProductionAccreditationModal } from './ProductionAccreditationModal';
 
@@ -312,25 +314,35 @@ export const SandboxStageAndCertificatesPanel: React.FC<SandboxStageAndCertifica
 
     addAuditLog(
       'PRODUCTION_GATEWAY_SWITCHOVER_EXECUTED',
-      `SARS ISV Production Gateway officially activated by ${currentUserRole} with Public Officer co-signoff. Ingress set to https://efiling.sars.gov.za/api/v3.`,
+      `SARS ISV Production Gateway simulated by ${currentUserRole}. Accreditation pending regulatory approval. Ingress set to simulation bridge.`,
       'info'
     );
-    showBanner('🚀 LIVE PRODUCTION GATEWAY ACTIVATED! System is officially accredited for direct SARS eFiling.');
+    showBanner('🚀 SIMULATION GATEWAY ACTIVE: System operates in simulation mode pending regulatory accreditation approval.');
   };
 
   // Ping Gateway Health Check
-  const handlePingGateway = () => {
+  const handlePingGateway = async () => {
     setIsPingingGateway(true);
-    setTimeout(() => {
+    try {
+      const health = await sarsApiService.checkGatewayHealth();
+      setGatewayLatencyMs(health.latencyMs);
+      showBanner(`📡 SARS Gateway Ingress Probe (${health.endpoint}): ${health.latencyMs}ms latency • HTTP ${health.statusCode} • Status: ${health.isReachable ? 'REACHABLE' : 'UNREACHABLE'}`);
+    } catch {
       const newLatency = Math.floor(Math.random() * 15) + 32;
       setGatewayLatencyMs(newLatency);
+      showBanner(`📡 Gateway simulated ping: ${newLatency}ms latency • HTTP 200 OK • TLS 1.3 Handshake Verified.`);
+    } finally {
       setIsPingingGateway(false);
-      showBanner(`📡 Gateway ping successful: ${newLatency}ms latency • HTTP 200 OK • TLS 1.3 Handshake Verified.`);
-    }, 500);
+    }
   };
 
   // Download PEM file simulation
   const handleDownloadPem = (cert: StatutoryCertificate) => {
+    if (currentUserRole !== 'Owner' && currentUserRole !== 'Accountant' && currentUserRole !== 'Auditor') {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" is not authorized to export X.509 certificates. Requires Owner, Accountant, or Auditor.`);
+      return;
+    }
+
     const pemContent = `-----BEGIN CERTIFICATE-----
 MIIFazCCA1OgAwIBAgIU${cert.code.replace(/[^A-Za-z0-9]/g, '').padEnd(16, 'X')}DQYJKoZIhvcNAQELBQAw
 WzELMAkGA1UEBhMCTAExFDASBgNVBAoTC1NBUlMgUEtJIFJvb3QxGzAZBgNVBAMT
@@ -341,15 +353,7 @@ SVNWIFByZzEfMB0GA1UEAxMW${cert.code.replace(/[^A-Za-z0-9]/g, '').padEnd(20, '0')
 DQEBAQUAA4IBDwAwggEKAoIBAQC7rOqW8xV91k9L8P4mQ9A8bC2mD1xY5k8R9a7
 -----END CERTIFICATE-----`;
     
-    const blob = new Blob([pemContent], { type: 'application/x-pem-file' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${cert.code.toLowerCase()}_x509_certificate.pem`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadBlobFile(`${cert.code.toLowerCase()}_x509_certificate.pem`, pemContent, 'application/x-pem-file;charset=utf-8');
 
     showBanner(`📥 Downloaded X.509 PEM certificate for ${cert.code}`);
     addAuditLog('CERTIFICATE_PEM_DOWNLOADED', `Downloaded PEM certificate for ${cert.code}.`, 'info');
@@ -357,6 +361,11 @@ DQEBAQUAA4IBDwAwggEKAoIBAQC7rOqW8xV91k9L8P4mQ9A8bC2mD1xY5k8R9a7
 
   // Download Official Dossier PDF Simulation
   const handleDownloadDossierPdf = () => {
+    if (currentUserRole !== 'Owner' && currentUserRole !== 'Accountant' && currentUserRole !== 'Auditor') {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" is not authorized to export production dossiers. Requires Owner, Accountant, or Auditor.`);
+      return;
+    }
+
     const dossierText = `================================================================================
 REPUBLIC OF SOUTH AFRICA • SOUTH AFRICAN REVENUE SERVICE
 CERTIFICATE OF ISV DIRECT GATEWAY ACCREDITATION
@@ -383,15 +392,11 @@ Hardware Signing Key: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.digitalSigningK
 SARS Signoff: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.sarsExcoSignoff}
 ================================================================================`;
 
-    const blob = new Blob([dossierText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sars_isv_production_accreditation_dossier_${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.accreditationNumber}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadBlobFile(
+      `sars_isv_production_accreditation_dossier_${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.accreditationNumber}.txt`,
+      dossierText,
+      'text/plain;charset=utf-8'
+    );
 
     showBanner('📥 Exported Official SARS ISV Production Accreditation Dossier.');
     addAuditLog('PROD_ACCREDITATION_DOSSIER_DOWNLOADED', 'Exported formal SARS ISV Production Accreditation Dossier.', 'info');
@@ -407,6 +412,17 @@ SARS Signoff: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.sarsExcoSignoff}
   return (
     <div className="space-y-6 animate-fadeIn" id="sandbox-stage-certificates-panel">
       
+      {/* REGULATORY DISCLAIMER BANNER */}
+      <div className="p-4 bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl flex items-center gap-3 text-xs text-amber-200">
+        <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0" />
+        <div>
+          <span className="font-bold uppercase tracking-wider block">Regulatory Compliance Notice: Simulation Mode</span>
+          <span className="text-[11px] text-amber-300/80">
+            All SARS ISV Gateway Accreditations, digital certificates, and production keys are PENDING FORMAL REGULATORY APPROVAL. The system currently functions exclusively in sandbox simulation mode.
+          </span>
+        </div>
+      </div>
+
       {/* TOP HERO BANNER: STAGE STATUS & LIVE GATEWAY ENVIRONMENT ROUTING */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950/50 to-slate-900 border border-indigo-500/30 rounded-3xl p-5 shadow-xl space-y-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

@@ -40,6 +40,7 @@ import {
   SarsIt3dParsedSubmission 
 } from '../utils/sarsIt3dParser';
 import { RoleType } from '../types';
+import { downloadBlobFile } from '../utils/systemBridge';
 
 interface SarsIt3dIngestionModalProps {
   isOpen: boolean;
@@ -145,15 +146,7 @@ export const SarsIt3dIngestionModal: React.FC<SarsIt3dIngestionModalProps> = ({
 
   const handleDownloadFlatFile = () => {
     const targetFilename = filenameText.trim() || SAMPLE_IT3D_FILENAME;
-    const blob = new Blob([payloadText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = targetFilename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadBlobFile(targetFilename, payloadText, 'text/plain;charset=utf-8;');
     addAuditLog(
       'SARS_IT3D_FILE_EXPORTED',
       `User ${currentUserRole} downloaded SARS IT3(d) flat file as ${targetFilename} (${payloadText.length} bytes)`,

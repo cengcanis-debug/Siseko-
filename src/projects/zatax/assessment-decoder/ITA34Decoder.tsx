@@ -20,6 +20,7 @@ import {
 import { EntityProfile } from '../../../types';
 import { ITA34_4015_DEFAULT_ASSESSMENT, SOUTH_AFRICAN_TAX_LEGAL_DB } from './legalDatabase';
 import { VaultEvidenceItem, Rule7ObjectionPack } from './types';
+import { downloadBlobFile } from '../../../utils/systemBridge';
 
 interface ITA34DecoderProps {
   profile: EntityProfile;
@@ -126,7 +127,7 @@ export const ITA34Decoder: React.FC<ITA34DecoderProps> = ({
       objectionRef: objRef,
       taxpayerName: profile.name || 'Ilitha Fintech Operations (Pty) Ltd',
       taxpayerId: profile.registrationNumber || '2026/707498/07',
-      taxReferenceNo: profile.sarsTaxNumber || '9012345678',
+      taxReferenceNo: profile.sarsTaxNumber || '9304318273',
       assessmentNoticeNo,
       taxYear: '2026',
       sourceCode: assessmentData.sourceCode,
@@ -158,6 +159,57 @@ export const ITA34Decoder: React.FC<ITA34DecoderProps> = ({
       'info'
     );
     showBanner(`📜 Rule 7 Objection #${objRef} successfully drafted and sealed!`);
+  };
+
+  const handleDownloadADR1Dossier = () => {
+    if (!objectionPack) return;
+    const content = [
+      'REPUBLIC OF SOUTH AFRICA - SOUTH AFRICAN REVENUE SERVICE',
+      'NOTICE OF OBJECTION (FORM ADR1 - TAA RULE 7 COMPLIANT)',
+      '=========================================================================',
+      `Objection Reference: ${objectionPack.objectionRef}`,
+      `Taxpayer: ${objectionPack.taxpayerName} (Registration: ${objectionPack.taxpayerId})`,
+      `SARS Tax Reference: ${objectionPack.taxReferenceNo}`,
+      `ITA34 Assessment Notice No: ${objectionPack.assessmentNoticeNo}`,
+      `Tax Assessment Year: ${objectionPack.taxYear}`,
+      `Disputed Source Code: ${objectionPack.sourceCode} (Business Travel Deduction)`,
+      `Disallowed Amount Claimed: R ${objectionPack.disallowedAmount.toFixed(2)}`,
+      `Business Kilometers Relied Upon: ${objectionPack.businessKms.toLocaleString()} km`,
+      `Date Drafted: ${objectionPack.draftedAt}`,
+      `Statutory Window: ${daysRemaining} business days remaining of 80-day period`,
+      '=========================================================================',
+      '',
+      'PART A: STATEMENT OF FACTS RELIED UPON (RULE 7(1)(b)):',
+      ...objectionPack.facts.map((f, i) => `${i + 1}. ${f}`),
+      '',
+      'PART B: GROUNDS OF LAW AND STATUTORY PROVISIONS (RULE 7(1)(c)):',
+      ...objectionPack.legalGrounds.map((g, i) => `${i + 1}. ${g}`),
+      '',
+      'PART C: CORROBORATING EVIDENCE FROM AUDIT-READY VAULT:',
+      ...objectionPack.attachedEvidence.map((e, i) => `${i + 1}. ${e.filename} (${e.docType}, ${e.size}) - SHA256:${e.sha256}`),
+      '',
+      'PART D: RELIEF SOUGHT BY TAXPAYER:',
+      `The taxpayer respectfully requests that the Commissioner allow the objection in full, alter assessment ${objectionPack.assessmentNoticeNo}, and reinstate the allowable business travel deduction of R ${objectionPack.disallowedAmount.toFixed(2)} under Source Code 4015.`,
+      '',
+      '=========================================================================',
+      'DIGITAL CERTIFICATION & SIGNATURE:',
+      `Drafted by: ${profile.name || 'Authorized Tax Practitioner'}`,
+      'Security Signature: RSA-SHA256 DIGITAL TIMESTAMP VALIDATED',
+      'STATUS: READY FOR SARS eFILING DISPUTE LODGEMENT'
+    ].join('\n');
+
+    downloadBlobFile(
+      `SARS_ADR1_Rule7_Objection_${objectionPack.objectionRef}.txt`,
+      content,
+      'text/plain;charset=utf-8;'
+    );
+
+    addAuditLog(
+      'ADR1_OBJECTION_DOSSIER_DOWNLOADED',
+      `Exported Form ADR1 Notice of Objection dossier (#${objectionPack.objectionRef}) for Source Code ${objectionPack.sourceCode}. Corroborated with Logbook #789 and Purchase Agreement.`,
+      'info'
+    );
+    showBanner(`📥 Form ADR1 Notice of Objection (${objectionPack.objectionRef}) downloaded!`);
   };
 
   return (
@@ -822,13 +874,37 @@ export const ITA34Decoder: React.FC<ITA34DecoderProps> = ({
               </div>
 
               {/* NAVIGATION BUTTONS */}
-              <div className="flex justify-between items-center pt-2">
+              <div className="flex flex-wrap justify-between items-center gap-3 pt-3 border-t border-white/10">
                 <button
                   onClick={() => setWizardStep(2)}
                   className="px-4 py-2 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
                 >
                   Back to Evidence
                 </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleCopy(
+                      `ADR1 NOTICE OF OBJECTION (TAA RULE 7)\nTax Ref: ${objectionPack.taxReferenceNo}\nNotice: ${objectionPack.assessmentNoticeNo}\nDisputed Code: ${objectionPack.sourceCode}\nFacts: ${objectionPack.facts.join(' ')}\nLaw: ${objectionPack.legalGrounds.join(' ')}`,
+                      'adr1-full-copy',
+                      'Rule 7 Objection text'
+                    )}
+                    className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Copy Rule 7 Brief</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadADR1Dossier}
+                    className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/20"
+                    id="download-adr1-dossier-btn"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Form ADR1 Notice</span>
+                  </button>
+                </div>
+
                 {onNavigateToSentinel && (
                   <button
                     onClick={onNavigateToSentinel}

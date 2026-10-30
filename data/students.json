@@ -1,9 +1,14 @@
 [
   {
+    "id": "UCT-TAX-2026-01",
+    "studentId": "UCT-TAX-2026-01",
+    "studentNumber": "UCT-TAX-2026-01",
     "fullName": "Siswe Mahura",
+    "name": "S Mahura",
     "email": "smahura@outlook.com",
     "qualification": "Postgraduate Diploma in Tax Law",
     "institution": "University of Cape Town",
-    "studentId": "UCT-TAX-2026-01"
+    "enrolledDate": "2026-01-15",
+    "status": "Active"
   }
 ]

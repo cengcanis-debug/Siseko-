@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   Check
 } from 'lucide-react';
-import { InvoiceRecord, RoleType } from '../types';
+import { InvoiceRecord, RoleType, UserTaxProfile } from '../types';
 
 interface VatOcrScannerPanelProps {
   formatZAR: (val: number) => string;
@@ -21,6 +21,7 @@ interface VatOcrScannerPanelProps {
   showBanner: (msg: string) => void;
   currentUserRole: RoleType;
   checkPermission: (role: RoleType, action: string) => boolean;
+  profile?: UserTaxProfile;
 }
 
 export const VatOcrScannerPanel: React.FC<VatOcrScannerPanelProps> = ({
@@ -29,15 +30,16 @@ export const VatOcrScannerPanel: React.FC<VatOcrScannerPanelProps> = ({
   addAuditLog,
   showBanner,
   currentUserRole,
-  checkPermission
+  checkPermission,
+  profile
 }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [scannedDoc, setScannedDoc] = useState<Partial<InvoiceRecord> | null>({
     id: 'INV-SCAN-2026-882',
     supplierName: 'Makro Commercial Supplies (Pty) Ltd',
     supplierVatNumber: '4920192831',
-    customerName: 'Cape Tech Innovations CC',
-    customerVatNumber: '4019283741',
+    customerName: profile?.name || 'Ilitha Fintech Operations (Pty) Ltd',
+    customerVatNumber: profile?.vatNumber || '4010294821',
     invoiceNumber: 'MK-98214',
     date: '2026-06-18',
     subtotal: 12500.00,

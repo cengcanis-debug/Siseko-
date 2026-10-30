@@ -25,6 +25,7 @@ import {
   Database
 } from 'lucide-react';
 import { RoleType } from '../types';
+import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
 
 export interface BackendValidationError {
   id: string;
@@ -70,7 +71,7 @@ export const BackendValidationErrorTracker: React.FC<BackendValidationErrorTrack
       errorMessage: "Element 'solarCocCertificateChecksum' cannot be null when claiming > R500,000 under Section 12BA super-allowance.",
       failedField: 'payload.schedules.s12BA.cocChecksum',
       payloadSnippet: JSON.stringify({
-        taxpayerRef: "9812490123",
+        taxpayerRef: "9304318273",
         taxYear: 2026,
         solarPanelsCost: 450000,
         inverterCost: 150000,
@@ -165,7 +166,7 @@ export const BackendValidationErrorTracker: React.FC<BackendValidationErrorTrack
       failedField: 'it3dCertificates[0].deductibleSection18AAmount',
       payloadSnippet: JSON.stringify({
         pboNumber: "930048123",
-        donorTaxNumber: "9812490123",
+        donorTaxNumber: "9304318273",
         totalDonationAmountZAR: 150000,
         taxableIncomeZAR: 850000,
         s18AMaxAllowableZAR: 85000,
@@ -332,11 +333,27 @@ export const BackendValidationErrorTracker: React.FC<BackendValidationErrorTrack
   };
 
   const exportErrorsToCSV = () => {
-    const headers = ['Error ID', 'Timestamp', 'Module', 'Endpoint', 'Error Code', 'Severity', 'Status', 'Retries', 'Failed Field', 'Error Message', 'Statute'];
+    if (currentUserRole !== 'Owner' && currentUserRole !== 'Accountant' && currentUserRole !== 'Auditor') {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" is not authorized to export error diagnostics. Requires Owner, Accountant, or Auditor.`);
+      return;
+    }
+
+    const ref = generateSubmissionRef('SARS-ERRORS');
+    const headers = [
+      '# =====================================================================',
+      '# REPUBLIC OF SOUTH AFRICA • SOUTH AFRICAN REVENUE SERVICE',
+      '# SARS SENTINEL BACKEND VALIDATION FAULT AUDIT REPORT',
+      `# REFERENCE: ${ref}`,
+      `# EXPORT TIMESTAMP: ${new Date().toISOString()}`,
+      `# TOTAL ERRORS: ${errors.length}`,
+      '# =====================================================================',
+      'Error ID,Timestamp,Module,Endpoint,Error Code,Severity,Status,Retries,Failed Field,Error Message,Statute'
+    ];
+
     const rows = errors.map(e => [
       e.id,
       e.timestamp,
-      e.moduleLabel,
+      `"${e.moduleLabel}"`,
       e.endpoint,
       e.errorCode,
       e.severity,
@@ -347,16 +364,10 @@ export const BackendValidationErrorTracker: React.FC<BackendValidationErrorTrack
       `"${e.statutoryReference.replace(/"/g, '""')}"`
     ]);
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `sars_sentinel_validation_errors_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showBanner('📊 Downloaded validation error report as CSV.');
+    const csvContent = [...headers, ...rows.map(r => r.join(','))].join('\n');
+    downloadBlobFile(`sars_sentinel_validation_errors_${ref}.csv`, csvContent, 'text/csv;charset=utf-8;');
+    addAuditLog('VALIDATION_ERRORS_EXPORTED', `Exported Sentinel validation error diagnostics (${ref}, ${errors.length} records).`, 'info');
+    showBanner(`📊 Downloaded validation error report as CSV (${ref})!`);
   };
 
   return (
@@ -521,7 +532,7 @@ export const BackendValidationErrorTracker: React.FC<BackendValidationErrorTrack
             </thead>
             <tbody className="divide-y divide-white/5 text-xs">
               {filteredErrors.length === 0 ? (
-                <tr>
+                <tr key="no-validation-errors">
                   <td colSpan={7} className="text-center py-10 text-white/40 space-y-2">
                     <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto opacity-80" />
                     <p className="text-xs">No backend validation errors matching your criteria.</p>

@@ -11,9 +11,13 @@ import {
   AlertCircle,
   Sparkles,
   ArrowRight,
-  Info
+  Info,
+  Download
 } from 'lucide-react';
-import { RoleType } from '../types';
+import { RoleType, UserTaxProfile } from '../types';
+import { validateSouthAfricanId } from '../utils/sarsIt3dParser';
+import { maskSAId } from '../utils/popiaMasking';
+import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
 
 interface EtiEmployee {
   id: string;
@@ -31,6 +35,7 @@ interface EtiCalculatorPanelProps {
   showBanner: (msg: string) => void;
   currentUserRole: RoleType;
   checkPermission: (permission: string) => boolean;
+  profile?: UserTaxProfile;
 }
 
 export const EtiCalculatorPanel: React.FC<EtiCalculatorPanelProps> = ({
@@ -38,37 +43,11 @@ export const EtiCalculatorPanel: React.FC<EtiCalculatorPanelProps> = ({
   addAuditLog,
   showBanner,
   currentUserRole,
-  checkPermission
+  checkPermission,
+  profile
 }) => {
-  const [employees, setEmployees] = useState<EtiEmployee[]>([
-    {
-      id: 'eti-1',
-      name: 'Thabo Mokoena',
-      idNumber: '010412-ENC-0082',
-      age: 24,
-      monthlyWage: 4200,
-      qualifyingMonthTier: 'first_12',
-      inSezOrDesignatedIndustry: false
-    },
-    {
-      id: 'eti-2',
-      name: 'Zanele Ndlovu',
-      idNumber: '020824-ENC-3087',
-      age: 23,
-      monthlyWage: 5400,
-      qualifyingMonthTier: 'first_12',
-      inSezOrDesignatedIndustry: false
-    },
-    {
-      id: 'eti-3',
-      name: 'Liam van der Merwe',
-      idNumber: '990315-ENC-2089',
-      age: 26,
-      monthlyWage: 3800,
-      qualifyingMonthTier: 'second_12',
-      inSezOrDesignatedIndustry: false
-    }
-  ]);
+  // Production dynamic state: Initialized without synthetic hardcoded ID numbers
+  const [employees, setEmployees] = useState<EtiEmployee[]>([]);
 
   // Add Employee Form
   const [showAddModal, setShowAddModal] = useState(false);
@@ -109,12 +88,18 @@ export const EtiCalculatorPanel: React.FC<EtiCalculatorPanelProps> = ({
 
   const handleAddEmployee = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!checkPermission('ADD_TRANSACTION')) {
-      showBanner('🔒 Access Denied: Your role does not have permission to add employee records.');
+    if (!checkPermission('canEditTransactions')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" does not have permission to add employee records.`);
       return;
     }
     if (!name.trim() || !idNumber.trim() || wage <= 0) {
       showBanner('⚠️ Please fill in employee name, ID number, and monthly remuneration.');
+      return;
+    }
+
+    const idValidation = validateSouthAfricanId(idNumber);
+    if (!idValidation.isValid) {
+      showBanner('⚠️ Invalid South African ID number: Must be 13 digits and pass Luhn Mod-10 check.');
       return;
     }
 
@@ -142,13 +127,65 @@ export const EtiCalculatorPanel: React.FC<EtiCalculatorPanelProps> = ({
   };
 
   const handleDeleteEmployee = (id: string) => {
-    if (!checkPermission('DELETE_TRANSACTION')) {
-      showBanner('🔒 Access Denied: Your role does not have permission to delete employee records.');
+    if (!checkPermission('canDeleteTransactions')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" does not have permission to delete employee records. Requires Owner or Accountant.`);
       return;
     }
     setEmployees(employees.filter(e => e.id !== id));
     addAuditLog('ETI_EMPLOYEE_REMOVED', `Removed employee #${id} from ETI roll.`);
     showBanner('🗑️ Employee record removed from ETI roll.');
+  };
+
+  const handleExportEtiSchedule = () => {
+    if (!checkPermission('canDownloadLedger')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" is not authorized to export ETI schedules. Requires Owner, Accountant, or Auditor.`);
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const submissionRef = generateSubmissionRef('SARS-ETI');
+    const companyName = profile?.name || 'Ilitha Fintech Operations (Pty) Ltd';
+    const taxNumber = profile?.sarsTaxNumber || '9304318273';
+
+    const headers = [
+      '# =====================================================================',
+      '# REPUBLIC OF SOUTH AFRICA - EMPLOYMENT TAX INCENTIVE ACT NO 26 OF 2013',
+      '# MONTHLY EMP201 / EMP501 ETI SUBSIDY SCHEDULE (CODE 4118)',
+      `# SUBMISSION REFERENCE: ${submissionRef}`,
+      `# EMPLOYER ENTITY: ${companyName} [PAYE/Tax Ref: ${taxNumber}]`,
+      `# EXPORT TIMESTAMP: ${timestamp}`,
+      `# TOTAL QUALIFYING EMPLOYEES: ${employees.length}`,
+      `# TOTAL MONTHLY EMP201 ETI CREDIT: ${totalMonthlyEtiCredit}`,
+      `# PROJECTED ANNUALIZED ETI CASH SUBSIDY: ${totalAnnualEtiCredit}`,
+      '# =====================================================================',
+      '',
+      'EMPLOYEE_ID,EMPLOYEE_NAME,MASKED_ID_NUMBER,AGE,MONTHLY_REMUNERATION_ZAR,QUALIFYING_TIER,SEZ_DESIGNATED_STATUS,MONTHLY_ETI_CLAIM_ZAR,ANNUAL_SUBSIDY_ZAR'
+    ];
+
+    const rows = employees.map(emp => {
+      const claim = calculateIndividualEti(emp);
+      return [
+        `"${emp.id}"`,
+        `"${emp.name.replace(/"/g, '""')}"`,
+        `"${maskSAId(emp.idNumber)}"`,
+        emp.age,
+        emp.monthlyWage,
+        `"${emp.qualifyingMonthTier === 'first_12' ? 'First 12 Qualifying Months' : 'Second 12 Qualifying Months'}"`,
+        emp.inSezOrDesignatedIndustry,
+        claim,
+        claim * 12
+      ].join(',');
+    });
+
+    const csvContent = [...headers, ...rows].join('\n');
+    downloadBlobFile(
+      `SARS_ETI_EMP201_Schedule_${submissionRef}.csv`,
+      csvContent,
+      'text/csv;charset=utf-8;'
+    );
+
+    addAuditLog('ETI_SCHEDULE_EXPORTED', `Exported ETI EMP201 Schedule CSV (${submissionRef}) containing ${employees.length} qualifying youth employees. Total monthly credit: ${formatZAR(totalMonthlyEtiCredit)}.`);
+    showBanner(`📥 ETI Schedule (${submissionRef}) downloaded!`);
   };
 
   return (
@@ -166,14 +203,26 @@ export const EtiCalculatorPanel: React.FC<EtiCalculatorPanelProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-3.5 py-1.5 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-slate-950 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-indigo-500/30 cursor-pointer"
-          id="add-eti-employee-btn"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Youth Employee</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleExportEtiSchedule}
+            className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-emerald-500/30 cursor-pointer shadow-sm"
+            id="export-eti-schedule-btn"
+            title="Download EMP201 ETI Code 4118 Subsidy Schedule CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Schedule CSV</span>
+          </button>
+
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-3.5 py-1.5 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-slate-950 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-indigo-500/30 cursor-pointer"
+            id="add-eti-employee-btn"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Youth Employee</span>
+          </button>
+        </div>
       </div>
 
       {/* STATS SUMMARY */}
@@ -245,36 +294,44 @@ export const EtiCalculatorPanel: React.FC<EtiCalculatorPanelProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 font-mono text-[11px]">
-              {employees.map((emp) => {
-                const claim = calculateIndividualEti(emp);
-                return (
-                  <tr key={emp.id} className="hover:bg-white/5 transition-colors">
-                    <td className="py-2.5 text-white font-sans font-bold">{emp.name}</td>
-                    <td className="py-2.5 text-white/60">{emp.idNumber}</td>
-                    <td className="py-2.5 text-white/80">{emp.age} yrs</td>
-                    <td className="py-2.5 font-bold text-white">{formatZAR(emp.monthlyWage)}</td>
-                    <td className="py-2.5">
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-sans font-bold ${
-                        emp.qualifyingMonthTier === 'first_12' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-cyan-500/20 text-cyan-300'
-                      }`}>
-                        {emp.qualifyingMonthTier === 'first_12' ? 'Months 1-12 (Max R1.5k)' : 'Months 13-24 (Max R750)'}
-                      </span>
-                    </td>
-                    <td className="py-2.5 font-bold text-emerald-400">
-                      +{formatZAR(claim)}/mo
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <button
-                        onClick={() => handleDeleteEmployee(emp.id)}
-                        className="text-white/30 hover:text-rose-400 transition-colors p-1"
-                        title="Remove employee"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {employees.length === 0 ? (
+                <tr key="empty-eti-row">
+                  <td colSpan={7} className="py-8 text-center text-slate-500 font-sans">
+                    No qualifying youth employees registered yet. Click &quot;+ Add Youth Employee&quot; above to calculate dynamic SARS ETI credits.
+                  </td>
+                </tr>
+              ) : (
+                employees.map((emp) => {
+                  const claim = calculateIndividualEti(emp);
+                  return (
+                    <tr key={emp.id} className="hover:bg-white/5 transition-colors">
+                      <td className="py-2.5 text-white font-sans font-bold">{emp.name}</td>
+                      <td className="py-2.5 text-white/60">{maskSAId(emp.idNumber)}</td>
+                      <td className="py-2.5 text-white/80">{emp.age} yrs</td>
+                      <td className="py-2.5 font-bold text-white">{formatZAR(emp.monthlyWage)}</td>
+                      <td className="py-2.5">
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-sans font-bold ${
+                          emp.qualifyingMonthTier === 'first_12' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-cyan-500/20 text-cyan-300'
+                        }`}>
+                          {emp.qualifyingMonthTier === 'first_12' ? 'Months 1-12 (Max R1.5k)' : 'Months 13-24 (Max R750)'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 font-bold text-emerald-400">
+                        +{formatZAR(claim)}/mo
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <button
+                          onClick={() => handleDeleteEmployee(emp.id)}
+                          className="text-white/30 hover:text-rose-400 transition-colors p-1 cursor-pointer"
+                          title="Remove employee"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -297,7 +354,7 @@ export const EtiCalculatorPanel: React.FC<EtiCalculatorPanelProps> = ({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full bg-slate-950 border border-white/15 rounded-xl px-2.5 py-1.5 text-xs text-white"
-                  placeholder="e.g., Sipho Sithole"
+                  placeholder="e.g. Qualifying Youth Employee Full Name"
                   required
                 />
               </div>

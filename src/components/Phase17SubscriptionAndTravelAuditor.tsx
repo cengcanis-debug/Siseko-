@@ -19,7 +19,8 @@ import {
   Layers,
   FileText
 } from 'lucide-react';
-import { RoleType } from '../types';
+import { RoleType, UserTaxProfile } from '../types';
+import { downloadBlobFile } from '../utils/systemBridge';
 
 interface Phase17Props {
   formatZAR: (val: number) => string;
@@ -27,6 +28,7 @@ interface Phase17Props {
   showBanner: (msg: string) => void;
   currentUserRole: RoleType;
   checkPermission: (permission: string) => boolean;
+  profile?: UserTaxProfile;
 }
 
 export const Phase17SubscriptionAndTravelAuditor: React.FC<Phase17Props> = ({
@@ -35,6 +37,7 @@ export const Phase17SubscriptionAndTravelAuditor: React.FC<Phase17Props> = ({
   showBanner,
   currentUserRole,
   checkPermission,
+  profile
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'auditor' | 'billing' | 'webhooks'>('auditor');
 
@@ -97,7 +100,7 @@ export const Phase17SubscriptionAndTravelAuditor: React.FC<Phase17Props> = ({
   // Webhook simulator state
   const [webhookEventType, setWebhookEventType] = useState<'customer.subscription.updated' | 'payment.payfast.notify'>('customer.subscription.updated');
   const [webhookTier, setWebhookTier] = useState<'lite' | 'pro' | 'wealth'>('wealth');
-  const [webhookEmail, setWebhookEmail] = useState('executive@enterprise-client.co.za');
+  const [webhookEmail, setWebhookEmail] = useState(profile?.email || 'vzenzile@ilithafintech.co.za');
   const [webhookResult, setWebhookResult] = useState<any>(null);
   const [webhookLoading, setWebhookLoading] = useState(false);
 
@@ -115,6 +118,11 @@ export const Phase17SubscriptionAndTravelAuditor: React.FC<Phase17Props> = ({
 
   // Run TAA Rule 7 Audit Export
   const handleRunAuditExport = async () => {
+    if (!checkPermission('canDownloadLedger')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" is not authorized to generate and export audit packs. Requires Owner, Accountant, or Auditor.`);
+      return;
+    }
+
     setIsAuditing(true);
     setAuditResult(null);
 
@@ -176,22 +184,21 @@ export const Phase17SubscriptionAndTravelAuditor: React.FC<Phase17Props> = ({
     }
   };
 
-  // Simulated PDF download
-  const handleDownloadPdf = () => {
+  // Live TAA Rule 7 BRS Audit Dossier download
+  const handleDownloadPdf = async () => {
     setDownloadingPdf(true);
-    setTimeout(() => {
+    try {
+      const url = auditResult?.exportUrl || '/api/v1/audit/export/download';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      downloadBlobFile(`SARS_BRS_Audit_Dossier_${Date.now()}.csv`, blob, 'text/csv;charset=utf-8;');
+      showBanner('📥 Downloaded verified SARS BRS Audit Dossier from live export endpoint.');
+    } catch (e: any) {
+      showBanner(`Download error: ${e.message}`);
+    } finally {
       setDownloadingPdf(false);
-      const content = `SARS STATUTORY TRAVEL LOGBOOK AUDIT PACK (TAA RULE 7 COMPLIANT)\nGenerated: ${new Date().toISOString()}\nTier: ${currentTier.toUpperCase()}\nStatus: CERTIFIED COMPLIANT\nTotal Trips: ${trips.length}\nTotal Business Distance: ${trips.reduce((a, b) => a + b.business_km, 0)} km\nCorroboration: Matched to Section 11(a) General Deduction and SARS 2026/2027 Deemed Cost Tables.`;
-      const blob = new Blob([content], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `SARS_Travel_Audit_Export_${Date.now()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      showBanner('📥 Downloaded SARS Travel Audit Export PDF');
-    }, 600);
+    }
   };
 
   // Simulate Webhook dispatch

@@ -78,13 +78,13 @@ export const ProductionAccreditationModal: React.FC<ProductionAccreditationModal
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                  STAGE 5 ACCREDITATION DOSSIER
+                <span className="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                  STAGE 5 SIMULATION DOSSIER • ACCREDITATION PENDING APPROVAL
                 </span>
-                <span className="text-[10.5px] font-mono text-cyan-300 font-bold">{dossier.accreditationNumber}</span>
+                <span className="text-[10.5px] font-mono text-cyan-300 font-bold">{dossier.accreditationNumber} (Simulated)</span>
               </div>
               <h3 className="text-base font-bold text-white leading-tight mt-0.5">
-                SARS ISV Production Gateway Accreditation & Live Deployment
+                SARS ISV Gateway Simulator (Accreditation Pending Regulatory Approval)
               </h3>
             </div>
           </div>
@@ -100,6 +100,17 @@ export const ProductionAccreditationModal: React.FC<ProductionAccreditationModal
 
         {/* MODAL BODY */}
         <div className="p-6 space-y-6 text-xs text-white/80">
+
+          {/* SIMULATION DISCLAIMER BANNER */}
+          <div className="p-4 bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl space-y-1.5">
+            <div className="flex items-center gap-2 text-amber-300 font-bold text-xs uppercase tracking-wider">
+              <ShieldAlert className="w-4 h-4 text-amber-400" />
+              <span>REGULATORY NOTICE: ACCREDITATION & CERTIFICATION PENDING APPROVAL</span>
+            </div>
+            <p className="text-[11px] text-amber-200/90 leading-relaxed">
+              This system currently operates strictly in a simulated sandbox environment. All formal SARS ISV accreditations, digital certificates, and production gateway credentials are models pending official regulatory review and approval.
+            </p>
+          </div>
 
           {/* PRIMARY SOURCE VERIFICATION STATUS BANNER */}
           {!isEntityVerified && (
@@ -121,16 +132,16 @@ export const ProductionAccreditationModal: React.FC<ProductionAccreditationModal
             {/* REPUBLIC OF SOUTH AFRICA SARS CREST HEADER */}
             <div className="text-center space-y-1 pb-4 border-b border-amber-500/20">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/40 border border-amber-500/30 text-[10px] font-mono text-amber-300 uppercase font-bold tracking-widest">
-                Republic of South Africa • South African Revenue Service
+                Simulation Model • Accreditation Pending Regulatory Approval
               </div>
               <h2 className="text-lg font-extrabold text-white tracking-wide uppercase pt-1">
-                Certificate of ISV Direct Gateway Accreditation
+                ISV Direct Gateway Simulation Dossier
               </h2>
               <p className="text-[11px] font-mono text-white/60">
-                Issued pursuant to Section 255 of the Tax Administration Act No. 28 of 2011
+                Prepared pursuant to Section 255 of the Tax Administration Act No. 28 of 2011 (Pending Approval)
               </p>
               <p className="text-[10px] font-mono text-amber-300/80">
-                {dossier.gazetteNoticeRef}
+                {dossier.gazetteNoticeRef} (Simulation Spec)
               </p>
             </div>
 

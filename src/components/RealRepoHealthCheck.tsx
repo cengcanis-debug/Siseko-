@@ -25,6 +25,7 @@ import {
   FileJson
 } from 'lucide-react';
 import { maskEmail, maskName, maskSAId } from '../utils/popiaCrypto';
+import { downloadBlobFile } from '../utils/systemBridge';
 
 interface AuditPackManifest {
   'repo-health.json': {
@@ -58,7 +59,8 @@ interface AuditPackManifest {
 }
 
 interface Student {
-  id: string;
+  id?: string;
+  studentId?: string;
   studentNumber?: string;
   fullName?: string;
   name?: string;
@@ -225,9 +227,17 @@ export const RealRepoHealthCheck: React.FC<RealRepoHealthCheckProps> = ({ onNoti
     }
   };
 
-  const handleDownloadAuditPack = () => {
-    window.location.href = '/api/download-audit-pack';
-    if (onNotify) onNotify('Downloading audit-pack-20260516.zip...');
+  const handleDownloadAuditPack = async () => {
+    try {
+      if (onNotify) onNotify('Downloading audit-pack-20260516.zip...');
+      const res = await fetch('/api/download-audit-pack');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      downloadBlobFile('audit-pack-20260516.zip', blob, 'application/zip');
+      if (onNotify) onNotify('✅ Downloaded audit-pack-20260516.zip');
+    } catch (err: any) {
+      if (onNotify) onNotify(`Download error: ${err.message}`);
+    }
   };
 
   // Copy helper
@@ -270,7 +280,13 @@ export const RealRepoHealthCheck: React.FC<RealRepoHealthCheckProps> = ({ onNoti
       const res = await fetch('/api/students');
       if (res.ok) {
         const data = await res.json();
-        setStudents(data.students || []);
+        const rawStudents: Student[] = Array.isArray(data.students) ? data.students : [];
+        const normalized = rawStudents.map((s, idx) => ({
+          ...s,
+          id: s.id || s.studentId || s.studentNumber || `STU-2026-${String(idx + 1).padStart(3, '0')}`,
+          studentNumber: s.studentNumber || s.studentId || s.id || `STU-2026-${String(idx + 1).padStart(3, '0')}`
+        }));
+        setStudents(normalized);
       }
     } catch {
       // ignore
@@ -1137,7 +1153,7 @@ export const RealRepoHealthCheck: React.FC<RealRepoHealthCheckProps> = ({ onNoti
                         </thead>
                         <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
                           {scanResult.findings.map((f, idx) => (
-                            <tr key={idx} className="hover:bg-slate-900/50">
+                            <tr key={`pii-${f.file}-${f.line}-${idx}`} className="hover:bg-slate-900/50">
                               <td className="p-2.5 text-slate-300 truncate max-w-xs">{f.file}</td>
                               <td className="p-2.5 text-amber-400">{f.line}</td>
                               <td className="p-2.5 text-rose-400">{f.type}</td>
@@ -1206,37 +1222,40 @@ export const RealRepoHealthCheck: React.FC<RealRepoHealthCheckProps> = ({ onNoti
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {students.map((student) => {
-                    // NEVER render row.email directly
-                    const displayEmail = maskEmail(student.email); // -> [EMAIL MASKED]
-                    const displayName = maskName(student.fullName || student.name); // -> S Dlamini
-                    const displayId = student.studentNumber || student.id;
-
-                    return (
-                      <tr key={student.id} className="hover:bg-slate-900/50 transition-colors">
-                        <td className="p-3 font-mono text-cyan-300 font-bold">{displayId}</td>
-                        <td className="p-3 font-semibold text-white">{displayName}</td>
-                        <td className="p-3 text-slate-300 font-mono text-[11px]">{displayEmail}</td>
-                        <td className="p-3 text-slate-400">{student.qualification || 'POPIA Minimized'}</td>
-                        <td className="p-3 text-slate-400">{student.institution || 'N/A'}</td>
-                        <td className="p-3 text-right">
-                          <button
-                            onClick={() => handleDeleteStudent(student.id, displayName)}
-                            className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors cursor-pointer"
-                            title="Delete row from data/students.json"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {students.length === 0 && (
-                    <tr>
+                  {students.length === 0 ? (
+                    <tr key="empty-student-row">
                       <td colSpan={6} className="p-8 text-center text-slate-500">
                         No rows in student table. Click "Add Student Row" to insert a real row.
                       </td>
                     </tr>
+                  ) : (
+                    students.map((student, idx) => {
+                      // NEVER render row.email directly
+                      const displayEmail = maskEmail(student.email); // -> [EMAIL MASKED]
+                      const displayName = maskName(student.fullName || student.name); // -> S Dlamini
+                      const displayId = student.studentNumber || student.id || `STU-${idx + 1}`;
+                      const rowKey = `stu-row-${student.id || student.studentNumber || student.studentId || 'idx'}-${idx}`;
+                      const deleteId = student.id || student.studentId || student.studentNumber || '';
+
+                      return (
+                        <tr key={rowKey} className="hover:bg-slate-900/50 transition-colors">
+                          <td className="p-3 font-mono text-cyan-300 font-bold">{displayId}</td>
+                          <td className="p-3 font-semibold text-white">{displayName}</td>
+                          <td className="p-3 text-slate-300 font-mono text-[11px]">{displayEmail}</td>
+                          <td className="p-3 text-slate-400">{student.qualification || 'POPIA Minimized'}</td>
+                          <td className="p-3 text-slate-400">{student.institution || 'N/A'}</td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => handleDeleteStudent(deleteId, displayName)}
+                              className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors cursor-pointer"
+                              title="Delete row from data/students.json"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

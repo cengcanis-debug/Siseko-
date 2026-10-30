@@ -1,39 +1,16 @@
 import { UserTaxProfile, TaxTransaction, InvoiceRecord } from '../types';
 
 export async function scanInvoiceOCR(imageBase64: string): Promise<Partial<InvoiceRecord>> {
-  try {
-    const res = await fetch('/api/gemini/scan-invoice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64 }),
-    });
-    if (!res.ok) throw new Error('API error');
-    return await res.json();
-  } catch (err) {
-    console.warn('Backend scan failed or offline, using smart simulated extraction fallback');
-    // Simulated smart extraction response
-    const mockCategories = ['Office Hardware & IT', 'Professional Indemnity Insurance', 'Cloud Hosting Supplies', 'Marketing & Client Advertising'];
-    const mockCat = mockCategories[Math.floor(Math.random() * mockCategories.length)];
-    const randAmt = Math.round((500 + Math.random() * 4500) * 100) / 100;
-    const vat = Math.round((randAmt * 15 / 115) * 100) / 100;
-
-    return {
-      supplierName: 'Takealot Online (Pty) Ltd',
-      vatNumber: '489021200' + Math.floor(Math.random() * 9),
-      invoiceNumber: 'INV-' + Math.floor(100000 + Math.random() * 900000),
-      date: new Date().toISOString().split('T')[0],
-      category: mockCat,
-      sarsSection: 'Section 11(a) General Business Expense',
-      totalAmount: randAmt,
-      vatAmount: vat,
-      netAmount: randAmt - vat,
-      isVatClaimable: true,
-      isDeductible: true,
-      explanation: `Valid SARS South African Tax Invoice detected. Input VAT of R${vat.toFixed(2)} is fully claimable under VAT201 Schedule 1.`,
-      confidence: 0.96,
-      syncedToSarsReport: true,
-    };
+  const res = await fetch('/api/gemini/scan-invoice', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64 }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'SARS Invoice OCR service unavailable. Please check system connectivity or manually enter invoice fields.');
   }
+  return await res.json();
 }
 
 export async function adviseNewTransaction(

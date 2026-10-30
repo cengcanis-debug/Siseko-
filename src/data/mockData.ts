@@ -5,26 +5,64 @@ import {
   BankAccount, 
   PendingBankTransaction, 
   SarsLegislationUpdate, 
-  ScenarioSimulation 
+  ScenarioSimulation,
+  CategorizationRule
 } from '../types';
 
 export const initialTaxProfile: UserTaxProfile = {
-  name: 'Sipho Dlamini (Dlamini Consulting)',
-  entityType: 'Self-Employed / Sole Prop',
+  name: 'Ilitha Fintech Operations (Pty) Ltd',
+  entityType: 'Small Business SME (Pty Ltd)',
   vatRegistered: true,
-  vatNumber: '4180123456',
-  taxBracketRate: 0.31, // 31% average/marginal South African bracket
+  vatNumber: '4010294821',
+  taxBracketRate: 0.27, // 27% South African corporate tax rate
   provisionalCycle: 'Cycle 1 (Aug 31)',
-  medicalAidMembers: 2, // Principal + 1 dependent = R364 + R364 monthly credit
-  hasRetirementAnnuity: true,
+  medicalAidMembers: 0,
+  hasRetirementAnnuity: false,
   // Identity & FICA fields
-  idNumber: '830512-ENC-9087',
-  sarsTaxNumber: '9817263544',
+  idNumber: '8204125184087',
+  sarsTaxNumber: '9304318273',
   ficaStatus: 'Verified',
   ficaProgress: 100,
-  directorsList: ['Sipho Dlamini'],
+  directorsList: ['V Zenzile', 'S Cengcani'],
   isOtpVerified: true,
-  lastIdentitySync: '2026-06-20',
+  lastIdentitySync: '2026-09-30',
+  // Statutory Enhancement Defaults
+  is13sexFiled: true,
+  unitsCount: 6,
+  unitCost: 850000,
+  isLowCost: false,
+  is11DApplied: true,
+  rdSalaries: 480000,
+  rdMaterials: 220000,
+  rdApproved: true,
+  is24CClaimed: true,
+  contractRevenue: 1400000,
+  futureCosts: 650000,
+  isSection24JApplied: true,
+  interestPrincipal: 2000000,
+  interestRate: 11.25,
+  isSection11gCApplied: true,
+  researchEquipmentCost: 750000,
+  isSection10BApplied: true,
+  foreignDividendsReceived: 120000,
+  isForeignParticipationExemption: false,
+  // Section 12BA Renewable Energy Super-Allowance
+  is12BAApplied: true,
+  solarSystemCost: 450000,
+  solarInstallationDate: '2025-11-15',
+  hasSolarCocInVault: true,
+  hasEskomGridTieApproval: true,
+  // Section 6quat Foreign Tax Credit
+  is6quatApplied: true,
+  foreignTaxableIncome: 180000,
+  foreignTaxWithheldZAR: 27000,
+  foreignTaxJurisdiction: 'United Kingdom (15% Treaty Rate)',
+  hasForeignTaxVoucherInVault: true,
+  // Paragraph 12A / Section 19 Debt Concession
+  isParagraph12AApplied: true,
+  debtReductionAmount: 500000,
+  debtReductionAssetCost: 350000,
+  hasDebtAgreementInVault: true,
 };
 
 export const initialTransactions: TaxTransaction[] = [
@@ -239,24 +277,61 @@ export const initialBankAccounts: BankAccount[] = [
   {
     id: 'bank-fnb',
     bankName: 'First National Bank (FNB)',
-    accountName: 'FNB Platinum Business Account',
+    accountName: 'FNB Commercial Enterprise Account',
     accountNumberMasked: '•••• •••• •••• 6192',
     balanceZAR: 74250.80,
     accountType: 'Business Current',
-    lastSynced: 'Just now (Real-time API Feed)',
+    lastSynced: 'Real-time API Feed (Open Banking TLS 1.3)',
     status: 'Connected',
   },
   {
-    id: 'bank-nedbank',
-    bankName: 'Nedbank',
-    accountName: 'Nedbank Savvy Savvy Account',
-    accountNumberMasked: '•••• •••• •••• 1044',
+    id: 'bank-standard',
+    bankName: 'Standard Bank',
+    accountName: 'Corporate Operational Cheque',
+    accountNumberMasked: '•••• •••• •••• 9820',
     balanceZAR: 18400.00,
-    accountType: 'Personal Cheque',
-    lastSynced: '12 mins ago',
+    accountType: 'Business Current',
+    lastSynced: 'Synchronized via Direct API',
     status: 'Connected',
   }
 ];
+
+/**
+ * Validates a tax profile according to official SARS BRS and POPIA requirements
+ */
+export function validateTaxpayerProfileSchema(profile: Partial<UserTaxProfile>): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (!profile.name || profile.name.trim().length < 2) {
+    errors.push('Legal entity or taxpayer name is mandatory (minimum 2 characters).');
+  }
+
+  if (profile.sarsTaxNumber) {
+    const cleaned = profile.sarsTaxNumber.replace(/[\s-]/g, '');
+    if (!/^\d{10}$/.test(cleaned)) {
+      errors.push('SARS Tax Reference must be exactly 10 digits.');
+    }
+  }
+
+  if (profile.vatRegistered && profile.vatNumber) {
+    const cleanedVat = profile.vatNumber.replace(/[\s-]/g, '');
+    if (!/^4\d{9}$/.test(cleanedVat)) {
+      errors.push('South African VAT numbers must be 10 digits beginning with 4.');
+    }
+  }
+
+  if (profile.idNumber) {
+    const cleanedId = profile.idNumber.replace(/[\s-]/g, '');
+    if (cleanedId.length === 13 && !/^\d{13}$/.test(cleanedId)) {
+      errors.push('South African National ID must be 13 numeric digits.');
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+}
 
 export const pendingMixedUseFeed: PendingBankTransaction[] = [
   {
@@ -401,3 +476,97 @@ export const technicalBlueprintNodes = [
     badgeColor: 'bg-rose-100 text-rose-800 border-rose-300',
   }
 ];
+
+export const initialCategorizationRules: CategorizationRule[] = [
+  {
+    id: 'rule-001',
+    name: 'Uber Travel Apportionment',
+    pattern: 'UBER',
+    matchType: 'contains',
+    category: 'Travel & Transport',
+    sarsSection: 'Section 11(a) Travel Expense',
+    type: 'expense',
+    deductiblePercentage: 100,
+    priority: 10,
+    enabled: true,
+    notes: 'Direct client travel. Capped at 100% deduction with trip receipt retention.',
+    createdAt: '2026-01-15T08:00:00Z',
+    matchCount: 14
+  },
+  {
+    id: 'rule-002',
+    name: 'Discovery Medical Aid Scheme',
+    pattern: 'DISCOVERY',
+    matchType: 'contains',
+    category: 'Medical Scheme',
+    sarsSection: 'Section 6A Medical Scheme Fees Tax Credit',
+    type: 'expense',
+    deductiblePercentage: 100,
+    priority: 15,
+    enabled: true,
+    notes: 'Qualifies for Section 6A direct tax rebate (R364/mo main member).',
+    createdAt: '2026-01-15T08:00:00Z',
+    matchCount: 6
+  },
+  {
+    id: 'rule-003',
+    name: 'iStore / Apple Computing Hardware',
+    pattern: 'ISTORE',
+    matchType: 'contains',
+    category: 'Computer & Office Equipment',
+    sarsSection: 'Section 11(e) / Section 12B Small Business Asset Allowance',
+    type: 'asset',
+    deductiblePercentage: 100,
+    priority: 20,
+    enabled: true,
+    notes: 'Computing gear written off over Section 11(e) 3-year schedule or Section 12E first year 100%.',
+    createdAt: '2026-01-20T08:00:00Z',
+    matchCount: 4
+  },
+  {
+    id: 'rule-004',
+    name: 'Vodacom Business Fibre & Mobile',
+    pattern: 'VODACOM',
+    matchType: 'contains',
+    category: 'Telecommunications',
+    sarsSection: 'Section 11(a) General Business Expense',
+    type: 'expense',
+    deductiblePercentage: 80,
+    priority: 12,
+    enabled: true,
+    notes: 'Apportioned 80% business use / 20% private use as per SARS IN47.',
+    createdAt: '2026-02-01T08:00:00Z',
+    matchCount: 8
+  },
+  {
+    id: 'rule-005',
+    name: 'Allan Gray Retirement Annuity',
+    pattern: 'ALLAN GRAY',
+    matchType: 'contains',
+    category: 'Retirement Fund Contribution',
+    sarsSection: 'Section 11F Retirement Funds Deduction',
+    type: 'investment',
+    deductiblePercentage: 100,
+    priority: 18,
+    enabled: true,
+    notes: 'Deductible up to 27.5% of taxable income under Section 11F (annual ceiling R350,000).',
+    createdAt: '2026-02-10T08:00:00Z',
+    matchCount: 6
+  },
+  {
+    id: 'rule-006',
+    name: 'Cloud SaaS Infrastructure (AWS/Google/Webflow)',
+    pattern: 'AWS',
+    matchType: 'contains',
+    category: 'Software & Cloud SaaS',
+    sarsSection: 'Section 11(a) General Business Expense',
+    type: 'expense',
+    deductiblePercentage: 100,
+    priority: 10,
+    enabled: true,
+    notes: 'Fully deductible business operational software expense.',
+    createdAt: '2026-02-15T08:00:00Z',
+    matchCount: 12
+  }
+];
+

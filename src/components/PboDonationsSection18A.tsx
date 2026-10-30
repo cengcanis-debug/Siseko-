@@ -16,9 +16,10 @@ import {
   FileCode,
   Upload
 } from 'lucide-react';
-import { RoleType } from '../types';
+import { RoleType, UserTaxProfile } from '../types';
 import { SarsIt3dIngestionModal } from './SarsIt3dIngestionModal';
 import { SAMPLE_USER_IT3D_PAYLOAD } from '../utils/sarsIt3dParser';
+import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
 
 interface DonationRecord {
   id: string;
@@ -42,6 +43,7 @@ interface PboDonationsSection18AProps {
   showBanner: (msg: string) => void;
   currentUserRole: RoleType;
   checkPermission: (permission: string) => boolean;
+  profile?: UserTaxProfile;
 }
 
 export const PboDonationsSection18A: React.FC<PboDonationsSection18AProps> = ({
@@ -50,7 +52,8 @@ export const PboDonationsSection18A: React.FC<PboDonationsSection18AProps> = ({
   addAuditLog,
   showBanner,
   currentUserRole,
-  checkPermission
+  checkPermission,
+  profile
 }) => {
   const [donations, setDonations] = useState<DonationRecord[]>([
     {
@@ -62,7 +65,8 @@ export const PboDonationsSection18A: React.FC<PboDonationsSection18AProps> = ({
       amount: 45000,
       natureOfDonation: 'cash',
       it3dVerified: true,
-      donorName: 'Taxpayer Entity',
+      donorName: profile?.name || 'Ilitha Fintech Operations (Pty) Ltd',
+      donorTaxRef: profile?.sarsTaxNumber || '9304318273',
       submittingEntity: 'Gift of the Givers Trust'
     },
     {
@@ -74,7 +78,8 @@ export const PboDonationsSection18A: React.FC<PboDonationsSection18AProps> = ({
       amount: 25000,
       natureOfDonation: 'cash',
       it3dVerified: true,
-      donorName: 'Taxpayer Entity',
+      donorName: profile?.name || 'Ilitha Fintech Operations (Pty) Ltd',
+      donorTaxRef: profile?.sarsTaxNumber || '9304318273',
       submittingEntity: 'NMCF Financial Administration'
     }
   ]);
@@ -100,8 +105,8 @@ export const PboDonationsSection18A: React.FC<PboDonationsSection18AProps> = ({
 
   const handleAddDonation = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!checkPermission('ADD_TRANSACTION')) {
-      showBanner('🔒 Access Denied: Your role does not have permission to add Section 18A donation records.');
+    if (!checkPermission('canEditTransactions')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" does not have permission to add Section 18A donation records.`);
       return;
     }
     if (!pboName.trim() || !pboNumber.trim() || amount <= 0) {
@@ -163,13 +168,71 @@ export const PboDonationsSection18A: React.FC<PboDonationsSection18AProps> = ({
   };
 
   const handleDeleteDonation = (id: string) => {
-    if (!checkPermission('DELETE_TRANSACTION')) {
-      showBanner('🔒 Access Denied: Your role does not have permission to delete donation records.');
+    if (!checkPermission('canDeleteTransactions')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot delete donation records. Requires Owner or Accountant.`);
+      addAuditLog('ACCESS_DENIED_DELETE_DONATION', `Unauthorized attempt by ${currentUserRole} to delete donation record #${id}.`, 'warn');
       return;
     }
     setDonations(donations.filter(d => d.id !== id));
-    addAuditLog('SECTION_18A_DONATION_DELETED', `Removed Section 18A donation record #${id}.`);
+    addAuditLog('SECTION_18A_DONATION_DELETED', `Removed Section 18A donation record #${id} by ${currentUserRole}.`);
     showBanner('🗑️ Donation record removed.');
+  };
+
+  const handleExportS18aSchedule = () => {
+    if (!checkPermission('canDownloadLedger')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" is not authorized to export Section 18A schedules. Requires Owner, Accountant, or Auditor.`);
+      addAuditLog('ACCESS_DENIED_EXPORT_S18A', `Unauthorized export attempt by ${currentUserRole}.`, 'warn');
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const submissionRef = generateSubmissionRef('SARS-S18A');
+    const taxpayerName = profile?.name || 'Ilitha Fintech Operations (Pty) Ltd';
+    const taxNumber = profile?.sarsTaxNumber || '9304318273';
+
+    const headers = [
+      '# =====================================================================',
+      '# REPUBLIC OF SOUTH AFRICA - SOUTH AFRICAN REVENUE SERVICE',
+      '# SECTION 18A PBO DONATIONS DEDUCTION & IT3(d) COMPLIANCE SCHEDULE',
+      `# SUBMISSION REFERENCE: ${submissionRef}`,
+      `# TAXPAYER: ${taxpayerName} [Tax Ref: ${taxNumber}]`,
+      `# EXPORT TIMESTAMP: ${timestamp}`,
+      `# TAXABLE INCOME ASSESSED: ${taxableIncome}`,
+      `# TOTAL PBO DONATIONS CLAIMED: ${totalDonations}`,
+      `# SECTION 18A 10% DEDUCTION CAP: ${section18aCap}`,
+      `# ALLOWABLE CURRENT YEAR DEDUCTION: ${allowableDeduction}`,
+      `# CARRIED-FORWARD DONATION TO NEXT TAX YEAR: ${excessCarriedForward}`,
+      '# =====================================================================',
+      '',
+      'RECORD_ID,PBO_NAME,PBO_NUMBER,IT3D_CERTIFICATE_NO,DONATION_DATE,AMOUNT_ZAR,NATURE_OF_DONATION,IT3D_VERIFIED,DONOR_NAME,DONOR_TAX_REF'
+    ];
+
+    const rows = donations.map(d => [
+      `"${d.id}"`,
+      `"${d.pboName.replace(/"/g, '""')}"`,
+      `"${d.pboNumber}"`,
+      `"${d.certificateNumber}"`,
+      `"${d.date}"`,
+      d.amount,
+      `"${d.natureOfDonation}"`,
+      d.it3dVerified,
+      `"${d.donorName || taxpayerName}"`,
+      `"${d.donorTaxRef || taxNumber}"`
+    ].join(','));
+
+    const csvContent = [...headers, ...rows].join('\n');
+    downloadBlobFile(
+      `SARS_Section18A_Schedule_${submissionRef}.csv`,
+      csvContent,
+      'text/csv;charset=utf-8;'
+    );
+
+    addAuditLog(
+      'SECTION_18A_SCHEDULE_DOWNLOADED',
+      `Exported Section 18A Schedule CSV (${submissionRef}) containing ${donations.length} records. Allowable deduction: ${formatZAR(allowableDeduction)}.`,
+      'info'
+    );
+    showBanner(`📥 Section 18A PBO Schedule (${submissionRef}) downloaded!`);
   };
 
   return (
@@ -188,6 +251,16 @@ export const PboDonationsSection18A: React.FC<PboDonationsSection18AProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleExportS18aSchedule}
+            className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+            id="export-s18a-schedule-btn"
+            title="Download Section 18A IT3(d) Tax Claim Schedule CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Schedule CSV</span>
+          </button>
+
           <button
             onClick={() => {
               setIt3dModalPayload(SAMPLE_USER_IT3D_PAYLOAD);

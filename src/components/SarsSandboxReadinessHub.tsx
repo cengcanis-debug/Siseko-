@@ -53,6 +53,8 @@ import {
 } from '../utils/sarsTaxPinGateway';
 import { SandboxStageAndCertificatesPanel } from './SandboxStageAndCertificatesPanel';
 import { SarsConnectDirectDiagnostic } from './SarsConnectDirectDiagnostic';
+import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
+import { sarsApiService, SarsValidationResponse } from '../services/sarsApiService';
 
 interface SarsSandboxReadinessHubProps {
   profile: UserTaxProfile;
@@ -133,7 +135,7 @@ export const SarsSandboxReadinessHub: React.FC<SarsSandboxReadinessHubProps> = (
 
   // Interactive State for Tax PIN Test
   const [taxPinRequest, setTaxPinRequest] = useState<SarsTaxPinVerificationRequest>({
-    taxpayerReferenceNumber: '9812490123',
+    taxpayerReferenceNumber: '9304318273',
     taxPin: '9821A849X0',
     requestingEntity: {
       entityName: 'Transnet SOC Ltd',
@@ -143,6 +145,9 @@ export const SarsSandboxReadinessHub: React.FC<SarsSandboxReadinessHubProps> = (
     },
     requestTimestamp: new Date().toISOString()
   });
+
+  const [isVerifyingWithApi, setIsVerifyingWithApi] = useState<boolean>(false);
+  const [liveApiValidation, setLiveApiValidation] = useState<SarsValidationResponse | null>(null);
 
   const [testCases, setTestCases] = useState<TestCase[]>([
     {
@@ -271,6 +276,49 @@ export const SarsSandboxReadinessHub: React.FC<SarsSandboxReadinessHubProps> = (
     setCopiedSection(sectionKey);
     showBanner(`📋 Copied ${label} to clipboard! Ready to paste into email.`);
     setTimeout(() => setCopiedSection(null), 3000);
+  };
+
+  const handleValidateViaApiGateway = async () => {
+    setIsVerifyingWithApi(true);
+    try {
+      const res = await sarsApiService.validateTaxpayer({
+        taxNumber: taxPinRequest.taxpayerReferenceNumber,
+        idNumber: '8204125184087',
+        tradingName: taxPinRequest.requestingEntity.entityName
+      });
+      setLiveApiValidation(res);
+      addAuditLog(
+        'SARS_API_GATEWAY_TAXPAYER_VALIDATED',
+        `Validated taxpayer ${taxPinRequest.taxpayerReferenceNumber} via SARS API Endpoint. Ref: ${res.reference}. Latency: ${res.latencyMs}ms.`,
+        res.verified ? 'info' : 'warn'
+      );
+      showBanner(`📡 SARS API Gateway: Taxpayer status verified (${res.latencyMs}ms) • Ref: ${res.reference}`);
+    } catch (e: any) {
+      showBanner(`Gateway probe failed: ${e.message}`);
+    } finally {
+      setIsVerifyingWithApi(false);
+    }
+  };
+
+  const handleDownloadIsvDossier = () => {
+    if (currentUserRole !== 'Owner' && currentUserRole !== 'Accountant' && currentUserRole !== 'Auditor') {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot export ISV accreditation dossiers.`);
+      return;
+    }
+
+    const submissionRef = generateSubmissionRef('SARS-ISV');
+    downloadBlobFile(
+      `SARS_ISV_Sandbox_Accreditation_Dossier_${submissionRef}.txt`,
+      fullEmailPackage,
+      'text/plain;charset=utf-8;'
+    );
+
+    addAuditLog(
+      'SARS_ISV_DOSSIER_DOWNLOADED',
+      `Exported complete SARS ISV Gateway Sandbox Application Dossier with all Annexures A-D (${submissionRef}).`,
+      'info'
+    );
+    showBanner(`📥 SARS ISV Accreditation Dossier (${submissionRef}) downloaded!`);
   };
 
   // SBD 4/9 Calculation Evaluation
@@ -422,7 +470,7 @@ ${JSON.stringify(taxPinResult, null, 2)}
     "header": {
       "objectionReference": "OBJ-2026-88194",
       "assessmentNoticeNumber": "ITA34-2026-98124901",
-      "taxpayerReferenceNumber": "9812490123",
+      "taxpayerReferenceNumber": "9304318273",
       "taxYear": 2026,
       "submissionTimestamp": "2026-08-28T08:30:00Z"
     },
@@ -524,7 +572,17 @@ ${annexureDText}`;
             id="copy-full-sars-application-btn"
           >
             {copiedSection === 'full_email' ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copiedSection === 'full_email' ? 'Copied Entire Dossier!' : 'Copy Full Application + Annexures'}</span>
+            <span>{copiedSection === 'full_email' ? 'Copied Entire Dossier!' : 'Copy Full Application'}</span>
+          </button>
+
+          <button
+            onClick={handleDownloadIsvDossier}
+            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 border border-white/15 cursor-pointer shadow-md"
+            id="download-full-isv-dossier-btn"
+            title="Download complete SARS ISV Gateway Application Dossier"
+          >
+            <Download className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Download Dossier</span>
           </button>
         </div>
       </div>
@@ -1075,6 +1133,16 @@ ${annexureDText}`;
                     <span>Copy JSON Schema</span>
                   </button>
                 </div>
+
+                <button
+                  onClick={handleValidateViaApiGateway}
+                  disabled={isVerifyingWithApi}
+                  className="w-full mt-2 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                  id="sars-api-taxpayer-validate-btn"
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isVerifyingWithApi ? 'animate-spin' : 'text-amber-300'}`} />
+                  <span>{isVerifyingWithApi ? 'Validating via SARS REST Gateway...' : 'Verify via SARS REST API Gateway'}</span>
+                </button>
               </div>
             </div>
 
@@ -1082,7 +1150,9 @@ ${annexureDText}`;
             <div className="bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-4">
               <h4 className="text-xs font-bold text-white uppercase tracking-wider border-b border-white/10 pb-2 flex items-center justify-between">
                 <span>SARS Gateway Real-Time Response Payload</span>
-                <span className="text-[10px] font-mono text-emerald-400">200 OK (31ms)</span>
+                <span className="text-[10px] font-mono text-emerald-400">
+                  {liveApiValidation ? `API: ${liveApiValidation.statusCode} (${liveApiValidation.latencyMs}ms)` : '200 OK (31ms)'}
+                </span>
               </h4>
 
               <div className="bg-black/50 border border-white/10 rounded-xl p-3.5 space-y-2 text-xs font-mono">
@@ -1109,6 +1179,27 @@ ${annexureDText}`;
                   </span>
                 </div>
               </div>
+
+              {liveApiValidation && (
+                <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-3 space-y-1.5 text-[11px] font-mono animate-fadeIn">
+                  <div className="flex justify-between text-emerald-300 font-bold border-b border-emerald-500/20 pb-1">
+                    <span>SARS API GATEWAY REF:</span>
+                    <span>{liveApiValidation.reference}</span>
+                  </div>
+                  <div className="flex justify-between text-white/70">
+                    <span>Direct Ingress Latency:</span>
+                    <span className="text-emerald-400 font-bold">{liveApiValidation.latencyMs}ms</span>
+                  </div>
+                  <div className="flex justify-between text-white/70">
+                    <span>Taxpayer Status:</span>
+                    <span className="text-emerald-400 font-bold">{liveApiValidation.details.taxpayerStatus}</span>
+                  </div>
+                  <div className="flex justify-between text-white/70">
+                    <span>Operating Environment:</span>
+                    <span className="text-cyan-300 uppercase">{liveApiValidation.environment}</span>
+                  </div>
+                </div>
+              )}
 
               <button
                 onClick={() => copyToClipboard(JSON.stringify(taxPinResult, null, 2), 'taxpin_res', 'Tax PIN Response JSON')}
@@ -1652,7 +1743,7 @@ ${annexureDText}`;
     "header": {
       "objectionReference": "OBJ-2026-88194",
       "assessmentNoticeNumber": "ITA34-2026-98124901",
-      "taxpayerReferenceNumber": "9812490123",
+      "taxpayerReferenceNumber": "9304318273",
       "submissionTimestamp": "2026-08-28T08:30:00Z"
     },
     "disallowedSourceCodes": [

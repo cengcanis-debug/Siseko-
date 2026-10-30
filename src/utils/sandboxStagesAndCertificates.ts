@@ -91,7 +91,7 @@ export const INITIAL_SANDBOX_STAGES: SandboxStage[] = [
     sarsSignoffOfficer: 'K. Naidoo (ISV Registrar)',
     stageNotes: 'Entity profile, CIPC incorporation, Public Officer appointment, and bilateral NDA executed.',
     deliverables: [
-      { name: 'CIPC Registration & Tax Number Verification', status: 'MET', details: 'Entity CIPC 2026/707498/07 & Tax Ref 9812490123 confirmed.' },
+      { name: 'CIPC Registration & Tax Number Verification', status: 'MET', details: 'Entity CIPC 2026/707498/07 & Tax Ref 9304318273 confirmed.' },
       { name: 'SARS ISV Bilateral NDA & Terms of Service', status: 'MET', details: 'Signed and countersigned by SARS Legal Division.' },
       { name: 'POPIA Section 19 Data Protection Impact Assessment', status: 'MET', details: 'AES-256 field-level tokenization validated.' }
     ]
@@ -157,20 +157,20 @@ export const INITIAL_SANDBOX_STAGES: SandboxStage[] = [
   {
     id: 5,
     key: 'stage_5_prod_accreditation',
-    name: 'Stage 5: Final Production Accreditation & Live Gateway Signoff',
-    shortTitle: 'Stage 5: Production Accreditation (100% ACTIVE)',
-    status: 'COMPLETED',
+    name: 'Stage 5: Production Accreditation & Live Gateway Signoff (Pending Approval - Simulation Mode)',
+    shortTitle: 'Stage 5: Accreditation (Simulation - Pending Approval)',
+    status: 'IN_PROGRESS',
     isCurrentStage: true,
-    completedAt: '2026-09-18 05:00',
-    targetCompletion: '2026-09-18',
-    progressPercentage: 100,
+    completedAt: undefined,
+    targetCompletion: '2026-10-31',
+    progressPercentage: 85,
     governanceStandard: 'National Treasury / SARS ISV Accreditation Gazette 49812 Notice 842 TAA §255',
-    sarsSignoffOfficer: 'Director of Digital Platforms (SARS Exco)',
-    stageNotes: 'Production accreditation signed off: Live production mTLS digital signing certificate active, live eFiling gateway connected at https://efiling.sars.gov.za/api/v3.',
+    sarsSignoffOfficer: 'Director of Digital Platforms (SARS Exco Review Pending)',
+    stageNotes: 'System currently operates strictly in simulation mode. Formal SARS ISV accreditation and production certificates are pending regulatory review and approval.',
     deliverables: [
-      { name: 'Formal SARS ISV Accreditation Certificate', status: 'MET', details: 'Accreditation No: SARS-ISV-ACC-2026-98124 Gazette 49812 Notice 842 TAA S255.' },
-      { name: 'Production RSA-4096 Digital Signing Certificate', status: 'MET', details: 'Production hardware-bound signing key active in Cloud HSM.' },
-      { name: 'Live Production Gateway Activation', status: 'MET', details: 'Connected to https://efiling.sars.gov.za/api/v3 with 42ms latency (HTTP 200 OK).' }
+      { name: 'Formal SARS ISV Accreditation Review', status: 'IN_PROGRESS', details: 'Dossier compiled; formal regulatory sign-off pending by SARS Exco & CIPC registrar.' },
+      { name: 'Production RSA-4096 Digital Signing Certificate Model', status: 'MET', details: 'Simulated hardware-bound signing key tested in Cloud HSM sandbox.' },
+      { name: 'Live Production Gateway Simulation Bridge', status: 'MET', details: 'Mock gateway integration active with sandbox payloads (Simulated 42ms response).' }
     ]
   }
 ];
@@ -179,32 +179,32 @@ export const INITIAL_STATUTORY_CERTIFICATES: StatutoryCertificate[] = [
   {
     id: 'CERT-SARS-MTLS-01',
     code: 'mTLS-STG-2026-V3',
-    name: 'SARS Staging Mutual TLS (mTLS) Client Certificate',
+    name: 'SARS Staging Mutual TLS (mTLS) Client Certificate (Sandbox)',
     category: 'GATEWAY_SECURITY',
-    issuingAuthority: 'SARS Intermediate Sub-CA (Staging PKI)',
+    issuingAuthority: 'SARS Intermediate Sub-CA (Staging PKI Simulation)',
     status: 'ACTIVE_VALID',
     isOutstanding: false,
-    statutoryReference: 'SARS-ISV-SEC-01 / FIPS 140-3 Level 3',
+    statutoryReference: 'SARS-ISV-SEC-01 / FIPS 140-3 Level 3 (Sandbox)',
     fingerprintSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
     validUntil: '2027-08-22',
-    associatedModule: 'SARS Direct Gateway Bridge (Staging v3)',
-    blockingImpact: 'None — Fully active. Allows secure communication with staging endpoints.',
-    remediationAction: 'Installed in Cloud Secret Manager HSM store. Auto-renewal scheduled for 2027.',
+    associatedModule: 'SARS Direct Gateway Bridge (Staging v3 Simulation)',
+    blockingImpact: 'None — Sandbox mTLS simulation active.',
+    remediationAction: 'Installed in Cloud Secret Manager HSM store. Operates in sandbox simulation mode.',
     fileAttachmentName: 'sars_mtls_staging_client_cert.p12',
     issuedAt: '2026-08-22'
   },
   {
     id: 'CERT-SARS-PROD-02',
     code: 'PROD-SIGN-RSA4096-ISV',
-    name: 'SARS Production Gateway Digital Signing Certificate',
+    name: 'SARS Production Gateway Digital Signing Certificate (Pending Approval)',
     category: 'GATEWAY_SECURITY',
     issuingAuthority: 'SARS Root CA (Production eFiling Gateway)',
-    status: 'ACTIVE_VALID',
+    status: 'PENDING_ATTESTATION',
     isOutstanding: false,
     statutoryReference: 'Tax Administration Act §255 / Electronic Communications and Transactions Act §13',
-    associatedModule: 'Live Production eFiling Submission Engine',
-    blockingImpact: 'None — Live production gateway active. Accreditation SARS-ISV-ACC-2026-98124 verified.',
-    remediationAction: 'Provisioned in Cloud HSM. Connected to https://efiling.sars.gov.za/api/v3.',
+    associatedModule: 'Production eFiling Submission Engine (Simulation Mode)',
+    blockingImpact: 'Formal accreditation pending regulatory approval. Operates under sandbox simulation.',
+    remediationAction: 'Simulation prototype provisioned. Official attestation pending SARS regulatory sign-off.',
     fileAttachmentName: 'sars_isv_prod_signing_cert_rsa4096.pem',
     fingerprintSha256: '9b84a1e901f4c398910bca7821940a019d45e0fa8892110cba48991209ff821a',
     issuedAt: '2026-09-18'
@@ -335,7 +335,7 @@ export const DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER: ProductionAccreditationDo
   directorName: 'V Zenzile',
   leadDeveloper: 'S Cengcani',
   registeredAddress: '6787 Unique Homes, Mangaung, Bloemfontein 9301',
-  sarsTaxReference: '9812490123',
+  sarsTaxReference: '9304318273',
   publicOfficerName: 'V Zenzile',
   publicOfficerDesignation: 'Director & Public Officer',
   accreditedModules: [

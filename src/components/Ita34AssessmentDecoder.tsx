@@ -13,7 +13,8 @@ import {
   AlertCircle,
   ExternalLink,
   Maximize2,
-  X
+  X,
+  Briefcase
 } from 'lucide-react';
 import { EntityProfile } from '../types';
 import { SarsDisputePackModal } from './SarsDisputePackModal';
@@ -25,6 +26,7 @@ interface Ita34AssessmentDecoderProps {
   addAuditLog: (action: string, details: string, severity?: 'info' | 'warn' | 'crit') => void;
   showBanner: (msg: string) => void;
   onNavigateToSentinel?: () => void;
+  onNavigateToTaxPro?: () => void;
 }
 
 export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
@@ -32,7 +34,8 @@ export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
   formatZAR,
   addAuditLog,
   showBanner,
-  onNavigateToSentinel
+  onNavigateToSentinel,
+  onNavigateToTaxPro
 }) => {
   const [assessmentNoticeNo, setAssessmentNoticeNo] = useState('ITA34-2026-98214');
   const [disallowedSourceCode, setDisallowedSourceCode] = useState('4015');
@@ -53,14 +56,16 @@ export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
   const [daysRemaining, setDaysRemaining] = useState<number>(54); // Within 80 business days
   const [showDisputePackModal, setShowDisputePackModal] = useState<boolean>(false);
   const [showFullWizard, setShowFullWizard] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'card' | 'embedded_wizard'>('card');
 
   const handleDecodeAssessment = () => {
     addAuditLog(
       'ITA34_DISALLOWED_CODE_DECODED',
-      `Decoded ITA34 Notice #${assessmentNoticeNo}. Identified SARS write-back on Source Code ${disallowedSourceCode} (${disallowedDescription}) from ${formatZAR(originalClaimAmount)} to ${formatZAR(sarsAssessedAmount)}.`,
+      `Decoded ITA34 Notice #${assessmentNoticeNo}. Identified SARS write-back on Source Code ${disallowedSourceCode} (${disallowedDescription}) from ${formatZAR(originalClaimAmount)} to ${formatZAR(sarsAssessedAmount)}. Querying Audit-Ready Vault for corroboration...`,
       'warn'
     );
-    showBanner(`⚠️ ITA34 Decoder: Identified disallowed Source Code ${disallowedSourceCode} write-back to R0!`);
+    handleVerifyVaultCorroboration();
+    showBanner(`⚠️ ITA34 Decoder: Identified disallowed Source Code ${disallowedSourceCode} write-back to R0! Corroborated Logbook ID #789 and Vehicle Purchase Agreement in Vault.`);
   };
 
   const handleVerifyVaultCorroboration = () => {
@@ -97,21 +102,45 @@ export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
     <div className="bg-gradient-to-br from-[#10192e] to-[#0c1424] border border-cyan-500/20 rounded-3xl p-5 space-y-4 shadow-xl" id="ita34-assessment-decoder-root">
       
       {/* HEADER */}
-      <div className="flex justify-between items-center border-b border-white/10 pb-3">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-white/10 pb-3">
         <div className="flex items-center gap-2">
           <Scale className="w-4 h-4 text-cyan-400" />
           <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-            SARS Assessment Decoder & Rule 7 Objection
+            Dispute War Room • SARS Assessment Decoder & Rule 7 ADR1 Objection
           </h3>
         </div>
         <div className="flex items-center gap-2">
+          {/* VIEW SWITCHER */}
+          <div className="flex items-center bg-black/40 p-0.5 rounded-lg border border-white/10 text-[10px]">
+            <button
+              onClick={() => setViewMode('card')}
+              className={`px-2.5 py-1 rounded-md transition-all font-semibold ${
+                viewMode === 'card'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Action Card
+            </button>
+            <button
+              onClick={() => setViewMode('embedded_wizard')}
+              className={`px-2.5 py-1 rounded-md transition-all font-semibold ${
+                viewMode === 'embedded_wizard'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Full 3-Step Wizard & Legal DB
+            </button>
+          </div>
+
           <button
             onClick={() => setShowFullWizard(true)}
             className="text-[10px] font-bold bg-gradient-to-r from-cyan-500/30 to-blue-500/30 hover:from-cyan-500 hover:to-blue-500 text-cyan-200 hover:text-slate-950 px-2.5 py-1 rounded-lg border border-cyan-500/40 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-            title="Launch Full 3-Step Objection Wizard & Legal Database"
+            title="Launch Full-Screen 3-Step Objection Wizard & Legal Database"
           >
             <Maximize2 className="w-3 h-3" />
-            <span>Full Wizard</span>
+            <span className="hidden sm:inline">Pop-out</span>
           </button>
           <span className="text-[9px] font-mono bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/30">
             TAA §104 / RULE 7
@@ -119,7 +148,32 @@ export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
         </div>
       </div>
 
-      <div className="space-y-3 text-xs">
+      {viewMode === 'embedded_wizard' ? (
+        <div className="space-y-4">
+          <ITA34Decoder
+            profile={profile}
+            formatZAR={formatZAR}
+            addAuditLog={addAuditLog}
+            showBanner={showBanner}
+            onNavigateToSentinel={onNavigateToSentinel}
+          />
+        </div>
+      ) : (
+        <>
+          {/* OPERATIONAL SEPARATION BANNER */}
+          <div className="p-3 bg-cyan-950/40 border border-cyan-500/30 rounded-2xl flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 text-[11px] text-cyan-200">
+              <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span>
+                <strong>War Room Isolation:</strong> This War Room is strictly separated from the preventative Pre-Audit Shield. While Pre-Audit operates preventatively on incoming transactions, the War Room handles formal adversarial post-assessment litigation once SARS issues an adverse ITA34 write-back.
+              </span>
+            </div>
+            <span className="text-[9.5px] font-mono uppercase px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shrink-0 font-bold">
+              Post-Assessment Only
+            </span>
+          </div>
+
+          <div className="space-y-3 text-xs">
         
         {/* DISALLOWED SOURCE CODE DETECTION */}
         <div className="p-3.5 bg-rose-950/20 border border-rose-500/30 rounded-2xl space-y-2">
@@ -242,6 +296,17 @@ export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
                 <FileText className="w-3.5 h-3.5" />
                 <span>View SARS eFiling Dispute Pack (PDF/ADR1)</span>
               </button>
+
+              {onNavigateToTaxPro && (
+                <button
+                  onClick={onNavigateToTaxPro}
+                  className="w-full py-2 bg-gradient-to-r from-emerald-600/30 to-teal-600/30 hover:from-emerald-600/40 hover:to-teal-600/40 text-emerald-200 border border-emerald-500/40 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  id="open-tax-pro-connect-btn"
+                >
+                  <Briefcase className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Collaborate with Tax Practitioner (§240 TAA Sign-Off)</span>
+                </button>
+              )}
             </div>
           ) : (
             <button
@@ -269,6 +334,8 @@ export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
         </div>
 
       </div>
+      </>
+      )}
 
       {/* SARS DISPUTE PACK MODAL */}
       <SarsDisputePackModal
