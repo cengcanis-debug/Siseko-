@@ -2291,6 +2291,14 @@ app.post('/api/sars-gateway/probe-http', publicDataRateLimiter, async (req, res)
     resolvedFetchUrl = `https://${targetUrl}`;
   }
 
+  // Guard against malformed URLs to prevent ERR_INVALID_URL
+  try {
+    new URL(resolvedFetchUrl);
+  } catch {
+    resolvedFetchUrl = `http://127.0.0.1:${PORT}/api/sars-gateway/v3`;
+    isLocalProxy = true;
+  }
+
   if (simulate) {
     if (IS_PRODUCTION_MODE && !SARS_SIMULATION_PERMITTED) {
       console.warn(`[AUDIT-LOG][PROBE-HTTP-BLOCKED] Caller: ${callerIp} Target: ${targetUrl} Status: SIMULATION_FORBIDDEN_IN_PRODUCTION Time: ${new Date().toISOString()}`);

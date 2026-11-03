@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ShieldCheck,
   ShieldAlert,
+  Rocket,
   Car,
   Receipt,
   FileText,
@@ -108,11 +109,13 @@ import { TaxProfessionalConnect } from './components/TaxProfessionalConnect';
 import { Emp501InterimReconciliation } from './components/Emp501InterimReconciliation';
 import { SarsAiTaxAssistant } from './components/SarsAiTaxAssistant';
 import { GlobalAiChatbotWidget } from './components/GlobalAiChatbotWidget';
+import { ProductionLaunchCockpit } from './components/ProductionLaunchCockpit';
 import { auditTransaction } from './utils/sarsPreAuditEngine';
 import { TransactionPreAuditResult } from './types';
 import { systemBus, downloadBlobFile, generateSubmissionRef } from './utils/systemBridge';
 
 type NavTab =
+  | 'launch'
   | 'overview'
   | 'ai_assistant'
   | 'emp501_reconciliation'
@@ -148,7 +151,43 @@ export default function App() {
   // 1. Core Profile & Role State
   const [profile, setProfile] = useState<UserTaxProfile>(initialTaxProfile);
   const [currentUserRole, setCurrentUserRole] = useState<RoleType>('Owner');
-  const [activeTab, setActiveTab] = useState<NavTab>('overview');
+
+  const getInitialTab = (): NavTab => {
+    if (typeof window !== 'undefined') {
+      const path = (window.location.pathname || '').toLowerCase();
+      const hash = (window.location.hash || '').toLowerCase();
+      const search = (window.location.search || '').toLowerCase();
+      if (path.includes('launch') || hash.includes('launch') || search.includes('launch')) {
+        return 'launch';
+      }
+    }
+    return 'overview';
+  };
+
+  const [activeTab, setActiveTab] = useState<NavTab>(getInitialTab);
+
+  const handleTabChange = (tab: NavTab) => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined' && window.history) {
+      if (tab === 'launch') {
+        window.history.pushState(null, '', '/launch');
+      } else if (window.location.pathname === '/launch') {
+        window.history.pushState(null, '', '/');
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = (window.location.pathname || '').toLowerCase();
+      const hash = (window.location.hash || '').toLowerCase();
+      if (path.includes('launch') || hash.includes('launch')) {
+        setActiveTab('launch');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Pre-Audit Modal State for Immediately Evaluating Fed Transactions
   const [preAuditModalOpen, setPreAuditModalOpen] = useState(false);
@@ -560,9 +599,22 @@ export default function App() {
       {/* 2. NAVIGATION BAR */}
       <nav className="border-b border-white/5 bg-[#090D17] px-4 overflow-x-auto scrollbar-thin">
         <div className="max-w-7xl mx-auto flex items-center gap-1 py-2 text-xs">
+
+          <button
+            onClick={() => handleTabChange('launch')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'launch'
+                ? 'bg-gradient-to-r from-cyan-500/30 to-emerald-500/30 text-cyan-200 border border-cyan-400/50 shadow-sm font-bold ring-1 ring-cyan-400/30'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+            id="nav-launch-cockpit-btn"
+          >
+            <Rocket className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Launch Cockpit</span>
+          </button>
           
           <button
-            onClick={() => setActiveTab('overview')}
+            onClick={() => handleTabChange('overview')}
             className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'overview'
                 ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-sm'
@@ -942,6 +994,19 @@ export default function App() {
 
       {/* 3. MAIN WORKSPACE CONTENT */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+
+        {/* 0. PRODUCTION LAUNCH COCKPIT */}
+        {activeTab === 'launch' && (
+          <ProductionLaunchCockpit
+            profile={profile}
+            currentUserRole={currentUserRole}
+            onSelectRole={handleRoleChange}
+            onNavigateTab={(tabKey) => handleTabChange(tabKey as NavTab)}
+            showBanner={showBanner}
+            liveGrossIncome={liveSnapshot.grossIncome}
+            liveNetLiability={liveSnapshot.netTaxLiabilityOrRefund}
+          />
+        )}
         
         {/* OVERVIEW / COCKPIT TAB */}
         {activeTab === 'overview' && (
@@ -1643,7 +1708,7 @@ export default function App() {
           onNavigateTab={(tabKey) => setActiveTab(tabKey as NavTab)}
           showBanner={showBanner}
           liveGrossIncome={liveSnapshot.grossIncome}
-          liveNetLiability={liveSnapshot.netTaxLiability}
+          liveNetLiability={liveSnapshot.netTaxLiabilityOrRefund}
         />
       )}
 
