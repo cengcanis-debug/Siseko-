@@ -3683,4 +3683,11 @@ async function startServer() {
   });
 }
 
-startServer();
+// In local execution and traditional container runways, start the standalone listener.
+// In Vercel serverless functions, export the Express app directly.
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
+export { app };
