@@ -53,7 +53,7 @@ export const ProductionAccreditationModal: React.FC<ProductionAccreditationModal
   const isEntityVerified = 
     dossier.entityName === 'Ilitha Fintech Operations (Pty) Ltd' &&
     dossier.cipcRegistration === '2026/707498/07' &&
-    dossier.accreditationNumber === 'SARS-ISV-ACC-2026-98124' &&
+    (dossier.accreditationNumber.includes('2026-98124')) &&
     cipcCheck.isValid && 
     taxCheck.isValid;
 
@@ -148,7 +148,7 @@ export const ProductionAccreditationModal: React.FC<ProductionAccreditationModal
             {/* ENTITY RECOGNITION BLOCK */}
             <div className="space-y-3 text-center py-2">
               <p className="text-xs text-white/70 italic">
-                This is to certify that the digital tax calculation, statutory eFiling engine, and dispute system of:
+                Candidate technical dossier prepared for accreditation evaluation of the digital tax calculation, statutory eFiling engine, and dispute system of:
               </p>
               <div className="bg-black/50 border border-white/10 rounded-2xl p-3 inline-block max-w-xl mx-auto space-y-1">
                 <h3 className="text-sm font-black text-amber-200 uppercase tracking-wide">
@@ -163,7 +163,7 @@ export const ProductionAccreditationModal: React.FC<ProductionAccreditationModal
                   <span>•</span>
                   <span>SARS Tax Ref: <strong className="text-white">{dossier.sarsTaxReference}</strong></span>
                   <span>•</span>
-                  <span>Accreditation Ref: <strong className="text-cyan-300">{dossier.accreditationNumber}</strong></span>
+                  <span>Application Ref: <strong className="text-cyan-300">{dossier.accreditationNumber}</strong></span>
                 </div>
                 {dossier.registeredAddress && (
                   <p className="text-[10.5px] text-white/50 font-mono text-center pt-0.5">
@@ -172,15 +172,15 @@ export const ProductionAccreditationModal: React.FC<ProductionAccreditationModal
                 )}
               </div>
               <p className="text-xs text-white/70 leading-relaxed max-w-xl mx-auto">
-                has completed 100% of Gateway Schema Conformance Suites, Mutual TLS Cryptographic Provisioning, 
-                and Pilot UAT Disallowance Re-Simulations, and is officially granted <strong>Direct Production Gateway Ingress</strong>.
+                has completed candidate Gateway Schema Conformance Suites, Mutual TLS Cryptographic Provisioning, 
+                and Pilot UAT Disallowance Re-Simulations in Sandbox, and is submitted for <strong>SARS ISV Direct Gateway Accreditation Evaluation</strong>.
               </p>
             </div>
 
             {/* ACCREDITED MODULES CHIPS */}
             <div className="space-y-2 pt-2 border-t border-white/10">
               <span className="text-[10px] font-mono text-amber-300 uppercase font-bold tracking-wider block text-center">
-                Accredited Statutory Scope & Ingress Modules
+                Candidate Scope & Ingress Modules Under Evaluation
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {dossier.accreditedModules.map((mod, idx) => (
@@ -202,10 +202,10 @@ export const ProductionAccreditationModal: React.FC<ProductionAccreditationModal
               </div>
 
               <div className="space-y-1 bg-black/40 p-3 rounded-xl border border-white/5 text-right sm:text-left">
-                <span className="text-[9.5px] font-mono uppercase text-white/40 block">SARS Executive Signoff</span>
+                <span className="text-[9.5px] font-mono uppercase text-white/40 block">SARS Evaluation Status</span>
                 <span className="text-xs font-bold text-amber-200 block">{dossier.sarsExcoSignoff}</span>
-                <span className="text-[10px] text-cyan-300 font-mono block">Digital Signing Key: {dossier.digitalSigningKeyId}</span>
-                <span className="text-[9.5px] font-mono text-white/40 block pt-1">Active Through: {dossier.validThrough}</span>
+                <span className="text-[10px] text-cyan-300 font-mono block">Sandbox Signing Key: {dossier.digitalSigningKeyId}</span>
+                <span className="text-[9.5px] font-mono text-white/40 block pt-1">Evaluation Cycle: {dossier.validThrough}</span>
               </div>
             </div>
 

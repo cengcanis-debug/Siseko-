@@ -290,7 +290,7 @@ export const TaxGamificationPanel: React.FC<TaxGamificationPanelProps> = ({
               <div className="bg-white/5 border border-white/5 p-3 rounded-xl flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
                   <span className="font-bold text-white text-[11px] block">👤 Complete Tax Profile</span>
-                  <span className="text-[10px] text-white/40 block">Verify FICA status and details</span>
+                  <span className="text-[10px] text-white/40 block">Verify identity profile and KYC details</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {ficaStatus === 'Verified' ? (

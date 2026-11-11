@@ -53,6 +53,7 @@ import {
 } from '../utils/sarsTaxPinGateway';
 import { SandboxStageAndCertificatesPanel } from './SandboxStageAndCertificatesPanel';
 import { SarsConnectDirectDiagnostic } from './SarsConnectDirectDiagnostic';
+import { SarsRegistrationFormsManager } from './SarsRegistrationFormsManager';
 import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
 import { sarsApiService, SarsValidationResponse } from '../services/sarsApiService';
 
@@ -82,7 +83,7 @@ export const SarsSandboxReadinessHub: React.FC<SarsSandboxReadinessHubProps> = (
   showBanner,
   currentUserRole
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'sandbox_stages_certs' | 'connect_direct_probe' | 'email_application' | 'testing_suite' | 'sbd_csd_validator' | 'cidb_jv_math' | 'tax_pin_gateway' | 'payload_inspector'>('sandbox_stages_certs');
+  const [activeSubTab, setActiveSubTab] = useState<'registration_forms' | 'sandbox_stages_certs' | 'connect_direct_probe' | 'email_application' | 'testing_suite' | 'sbd_csd_validator' | 'cidb_jv_math' | 'tax_pin_gateway' | 'payload_inspector'>('registration_forms');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
   const [isRunningTests, setIsRunningTests] = useState<boolean>(false);
   const [testFilter, setTestFilter] = useState<string>('all');
@@ -590,6 +591,22 @@ ${annexureDText}`;
       {/* NAVIGATION SUB-TABS */}
       <div className="flex border-b border-white/10 gap-2 overflow-x-auto pb-1">
         <button
+          onClick={() => setActiveSubTab('registration_forms')}
+          className={`pb-3 px-3 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeSubTab === 'registration_forms'
+              ? 'border-indigo-400 text-indigo-300'
+              : 'border-transparent text-white/50 hover:text-white'
+          }`}
+          id="subtab-registration-forms"
+        >
+          <FileCheck2 className="w-4 h-4 text-emerald-400" />
+          <span>Application Forms (ISV-REG-01)</span>
+          <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-bold">
+            POPIA Compliant
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveSubTab('sandbox_stages_certs')}
           className={`pb-3 px-3 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
             activeSubTab === 'sandbox_stages_certs'
@@ -601,7 +618,7 @@ ${annexureDText}`;
           <Layers className="w-4 h-4 text-cyan-300" />
           <span>Testing Stages & Certificates</span>
           <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-bold">
-            Stage 5 • 100% Active
+            Testing Gates • Sandbox Active
           </span>
         </button>
 
@@ -699,6 +716,16 @@ ${annexureDText}`;
           <span>XML & JSON Payloads Inspector</span>
         </button>
       </div>
+
+      {/* VIEW: SARS STATUTORY REGISTRATION FORMS (FORM ISV-REG-01 & CSR) */}
+      {activeSubTab === 'registration_forms' && (
+        <SarsRegistrationFormsManager
+          profile={profile}
+          currentUserRole={currentUserRole}
+          showBanner={showBanner}
+          addAuditLog={addAuditLog}
+        />
+      )}
 
       {/* VIEW 0: SANDBOX TESTING STAGES & CERTIFICATES AUDITOR */}
       {activeSubTab === 'sandbox_stages_certs' && (

@@ -95,6 +95,7 @@ import TaxVisuals from './components/TaxVisuals';
 import { TaxGamificationPanel } from './components/TaxGamificationPanel';
 import { TaxLiteracyHub } from './components/TaxLiteracyHub';
 import { SessionSecurityModal } from './components/SessionSecurityModal';
+import { PopiaComplianceCenterModal } from './components/PopiaComplianceCenterModal';
 import { SarsPreAuditShield } from './components/SarsPreAuditShield';
 import { ImmediatePreAuditModal } from './components/ImmediatePreAuditModal';
 import { SarsAutoAssessmentPanel } from './components/SarsAutoAssessmentPanel';
@@ -247,6 +248,7 @@ export default function App() {
   // 4. Cryptographic Session & Access Control
   const [session, setSession] = useState<AppSession>(() => createDefaultSession('Owner'));
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
+  const [isPopiaModalOpen, setIsPopiaModalOpen] = useState(false);
 
   // 5. High-Fidelity Chronological Audit Log
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([
@@ -487,7 +489,7 @@ export default function App() {
 
   // Gamification stats
   const gamificationBadges = [
-    { id: 'b1', title: 'FICA Verified', description: 'Directive8 Safe Register Active', unlocked: profile.ficaStatus === 'Verified', metric: '100%', xpValue: 250, iconType: 'shield' },
+    { id: 'b1', title: 'Customer ID Due Diligence', description: 'Internal Identity Verification Complete', unlocked: profile.ficaStatus === 'Verified', metric: '100%', xpValue: 250, iconType: 'shield' },
     { id: 'b2', title: 'TAA Rule 7 Ready', description: 'Logbook Corroborated with Vault', unlocked: true, metric: '12,450 km', xpValue: 500, iconType: 'car' },
     { id: 'b3', title: 'VAT201 Invoices', description: 'Compliant Tax Invoices Tracked', unlocked: invoices.length >= 3, metric: `${invoices.length} Invoices`, xpValue: 300, iconType: 'receipt' },
     { id: 'b4', title: 'Section 7C Managed', description: 'Trust Loans Donated Under Exemption', unlocked: trustLoans.length > 0, metric: `${trustLoans.length} Loans`, xpValue: 400, iconType: 'coins' }
@@ -506,7 +508,7 @@ export default function App() {
       <header className="border-b border-white/10 bg-[#0B0F19]/90 backdrop-blur sticky top-0 z-40 px-4 py-3">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           
-          {/* Brand Identity & Directive8 Tracker */}
+          {/* Brand Identity & Internal Compliance Tracker */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400/20 via-amber-500/10 to-transparent border border-amber-400/40 flex items-center justify-center shadow-lg shadow-amber-500/10">
               <ShieldCheck className="w-6 h-6 text-amber-400" />
@@ -518,15 +520,15 @@ export default function App() {
                   TAA Rule 7 • 2026/2027
                 </span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-semibold hidden sm:inline-block">
-                  Simulated Engine • Accreditations Pending Approval
+                  Candidate ISV Gateway • Sandbox Testing Mode
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
-                <span>Directive8SafeRegister</span>
+                <span>Internal Self-Assessment Register</span>
                 <span className="text-slate-600">•</span>
-                <span className="text-emerald-400">Production Ledger Active</span>
+                <span className="text-cyan-400">Sandbox Test Ledger</span>
                 <span className="text-slate-600">•</span>
-                <span>FICA Compliant</span>
+                <span>Self-Assessment Checklist</span>
               </p>
             </div>
           </div>
@@ -570,6 +572,17 @@ export default function App() {
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
               <span>Export CSV</span>
+            </button>
+
+            {/* POPIA Section 18/19 Statutory Governance Pill */}
+            <button
+              onClick={() => setIsPopiaModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-medium transition cursor-pointer"
+              title="Inspect POPIA Section 18/19 statutory notices, consent records & storage scrubber"
+              id="open-popia-center-btn"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>POPIA §18/19</span>
             </button>
 
             {/* Session Security Token Pill */}
@@ -1664,6 +1677,16 @@ export default function App() {
           showBanner('⏳ Session extended by 60 minutes.');
         }}
         showBanner={showBanner}
+      />
+
+      {/* 5B. POPIA COMPLIANCE & PRIVACY CENTER MODAL */}
+      <PopiaComplianceCenterModal
+        isOpen={isPopiaModalOpen}
+        onClose={() => setIsPopiaModalOpen(false)}
+        profile={profile}
+        currentUserRole={currentUserRole}
+        showBanner={showBanner}
+        addAuditLog={addAuditLog}
       />
 
       {/* 6. IMMEDIATE TRANSACTION PRE-AUDIT EVALUATION MODAL */}

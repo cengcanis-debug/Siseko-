@@ -601,8 +601,8 @@ export const TaxLiteracyHub: React.FC<{
     const badges = [
       {
         id: "badge-fica",
-        title: "FICA Guard",
-        description: "Verify your legal identity and FICA status to secure your account data.",
+        title: "Identity & KYC Guard",
+        description: "Verify your legal identity and internal KYC profile to secure your account data.",
         unlocked: ficaVerified,
         metric: ficaVerified ? "Verified" : "Pending Action",
         xpValue: 500,

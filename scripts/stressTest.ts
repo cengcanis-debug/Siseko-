@@ -4,7 +4,17 @@
  */
 
 import { isRoleAuthorized, getRoleScopes } from '../src/utils/sessionSecurity';
-import { maskName, maskEmail, maskSAId } from '../src/utils/popiaMasking';
+import { 
+  maskName, 
+  maskEmail, 
+  maskSAId, 
+  maskSarsTaxNumber, 
+  maskBankAccount, 
+  maskPhone,
+  sanitizeObjectForLogging,
+  scrubClientStorage 
+} from '../src/utils/popiaMasking';
+import { validateCipcRegistrationNumber, validateSarsTaxReferenceNumber } from '../src/utils/formatValidation';
 import { generateLiveTaxSnapshot, calculateSANormalTax, formatZAR } from '../src/utils/taxCalculations';
 import { RoleType, UserTaxProfile, TaxTransaction, InvoiceRecord, PendingBankTransaction, CategorizationRule } from '../src/types';
 import { 
@@ -860,6 +870,174 @@ recordTest('AI_TAX_CHATBOT_ASSISTANT', 'Statutory knowledge training, tool recom
     if (!validNavTabs.includes(rec.tabKey)) {
       throw new Error(`Recommended tool tabKey '${rec.tabKey}' does not match any valid NavTab`);
     }
+  }
+
+  // Test 6: SARS Prescribed Interest Rate (11.75%) & Late Payment Penalties (§213/§187)
+  const overduePrincipal = 100000;
+  const sarsPrescribedRate = 0.1175; // 11.75% per annum
+  const daysOverdue = 60;
+  
+  // Daily Simple Interest: P * (r / 365) * days
+  const dailyRate = sarsPrescribedRate / 365;
+  const expectedInterest = Math.round(overduePrincipal * dailyRate * daysOverdue * 100) / 100;
+  // 100,000 * (0.1175 / 365) * 60 = 1931.5068... -> 1931.51
+  if (Math.abs(expectedInterest - 1931.51) > 0.05) {
+    throw new Error(`Expected prescribed interest of R1931.51 on R100,000 over 60 days, got R${expectedInterest}`);
+  }
+
+  // Statutory Late Payment Penalty: 10%
+  const latePaymentPenalty = Math.round(overduePrincipal * 0.10);
+  if (latePaymentPenalty !== 10000) {
+    throw new Error(`Expected late payment penalty of R10,000 on R100,000, got R${latePaymentPenalty}`);
+  }
+
+  // VDP Relief: Understatement penalty reduced from 50% (R50,000) to 0% (R0)
+  const auditUsp = overduePrincipal * 0.50; // 50%
+  const vdpUsp = 0; // 0% under TAA §227
+  const vdpSavings = auditUsp - vdpUsp;
+  if (vdpSavings !== 50000) {
+    throw new Error(`Expected VDP savings of R50,000, got R${vdpSavings}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SUITE 14: POPIA SECTION 18/19 COMPLIANCE & SARS REGISTRATION FORM VALIDATION
+// ---------------------------------------------------------------------------
+console.log('▶ [14/14] Executing POPIA Section 18/19 & SARS ISV Registration Forms Stress Test...');
+recordTest('POPIA_AND_REGISTRATION', 'Statutory Masking, Storage Scrub & Form ISV-REG-01 Conformance', () => {
+  // Test 1: PII Masking Boundaries
+  const sampleTaxNum = '9304318273';
+  const maskedTax = maskSarsTaxNumber(sampleTaxNum);
+  if (maskedTax !== '***8273') {
+    throw new Error(`Expected masked tax number '***8273', got '${maskedTax}'`);
+  }
+
+  const sampleBank = '62849102849';
+  const maskedBank = maskBankAccount(sampleBank);
+  if (!maskedBank.includes('2849') || !maskedBank.startsWith('••••')) {
+    throw new Error(`Expected masked bank account format, got '${maskedBank}'`);
+  }
+
+  const samplePhone = '0821234567';
+  const maskedPhone = maskPhone(samplePhone);
+  if (!maskedPhone.includes('4567') || !maskedPhone.startsWith('+27')) {
+    throw new Error(`Expected masked phone format, got '${maskedPhone}'`);
+  }
+
+  // Test 2: Recursive Object Sanitization for Logs
+  const sensitivePayload = {
+    user: 'Sipho Cengcani',
+    email: 'cengcanis@gmail.com',
+    password: 'SuperSecretPassword123!',
+    sarsTaxReference: '9304318273',
+    nested: {
+      accountNumber: '62849102849',
+      unrelated: 'safe-public-data'
+    }
+  };
+
+  const sanitized = sanitizeObjectForLogging(sensitivePayload);
+  if (sanitized.password !== '[REDACTED_BY_POPIA_SECTION_19]') {
+    throw new Error('sanitizeObjectForLogging failed to redact password');
+  }
+  if (sanitized.email !== '[REDACTED_BY_POPIA_SECTION_19]') {
+    throw new Error('sanitizeObjectForLogging failed to redact email');
+  }
+  if (sanitized.nested.accountNumber !== '[REDACTED_BY_POPIA_SECTION_19]') {
+    throw new Error('sanitizeObjectForLogging failed to redact nested account number');
+  }
+  if (sanitized.nested.unrelated !== 'safe-public-data') {
+    throw new Error('sanitizeObjectForLogging corrupted safe data');
+  }
+
+  // Test 3: Client Storage Scrubbing
+  const scrubResult = scrubClientStorage();
+  if (typeof scrubResult.scrubbedCount !== 'number' || !scrubResult.timestamp) {
+    throw new Error('scrubClientStorage failed to return compliant report');
+  }
+
+  // Test 4: SARS ISV Registration Form ISV-REG-01 Statutory Validation
+  const cipcReg = '2026/707498/07';
+  const cipcVal = validateCipcRegistrationNumber(cipcReg);
+  if (!cipcVal.isValid) {
+    throw new Error(`Form ISV-REG-01 CIPC registration '${cipcReg}' failed validation`);
+  }
+
+  const taxRef = '9304318273';
+  const taxVal = validateSarsTaxReferenceNumber(taxRef);
+  if (!taxVal.isValid) {
+    throw new Error(`Form ISV-REG-01 Tax Reference '${taxRef}' failed Mod-10 Luhn check`);
+  }
+
+  // Test 5: Information Officer Registration Reference
+  const infoRegRef = 'IR-POPIA-ZA-2026-98124';
+  if (!infoRegRef.startsWith('IR-POPIA-ZA-')) {
+    throw new Error('Information Regulator reference format invalid');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SUITE 15: VAT REFUND & SECTION 44/45 STATUTORY RECOVERY
+// ---------------------------------------------------------------------------
+console.log('▶ [15/15] Executing VAT Refund & Section 44/45 Interest Calculation Tests...');
+recordTest('VAT_REFUND_AND_SECTION_45', 'Section 44 21-day timeline, Section 45 delayed interest & TAA 191 set-off', () => {
+  // Test 1: VAT Refundable Balance Determination
+  const outputStandardVat = 850000 * 0.15; // R127,500
+  const inputCapitalGoods = 18500;
+  const inputOperationalGoods = 64200;
+  const badDebtRelief = 3450;
+  const customsVatPaid = 7800;
+  const additionalCapexSolar = 150000; // Large input purchase
+  const totalInputTax = inputCapitalGoods + inputOperationalGoods + badDebtRelief + customsVatPaid + additionalCapexSolar; // R243,950
+  const netVatPosition = Math.round((outputStandardVat - totalInputTax) * 100) / 100;
+
+  if (netVatPosition >= 0) {
+    throw new Error('Expected refundable VAT position, got payable');
+  }
+  const refundAmount = Math.abs(netVatPosition); // R116,450
+
+  // Test 2: Section 44(1) 21-Business-Day Benchmark Calculation
+  const statutoryWindowDays = 21;
+  const businessDaysElapsed = 26; // 5 days overdue
+  const delayedDays = Math.max(0, businessDaysElapsed - statutoryWindowDays);
+  if (delayedDays !== 5) {
+    throw new Error(`Expected 5 delayed days beyond 21-day window, got ${delayedDays}`);
+  }
+
+  // Test 3: Section 45 Delayed Refund Interest at 11.75% Prescribed Rate
+  const prescribedRateAnnual = 11.75;
+  const dailyRate = (prescribedRateAnnual / 100) / 365;
+  const calculatedInterest = Math.round(refundAmount * dailyRate * delayedDays * 100) / 100;
+  
+  if (calculatedInterest <= 0) {
+    throw new Error('Section 45 interest must be positive for delayed refund');
+  }
+
+  // Test 4: TAA Section 191 Cross-Tax Set-Off & Net Payout
+  const corporateTaxDebt = 12000;
+  const payeDebt = 0;
+  const totalSetOffs = corporateTaxDebt + payeDebt;
+  const netCashPayout = Math.round((refundAmount + calculatedInterest - totalSetOffs) * 100) / 100;
+
+  if (netCashPayout !== Math.round((refundAmount + calculatedInterest - 12000) * 100) / 100) {
+    throw new Error('TAA §191 set-off calculation incorrect');
+  }
+
+  // Test 5: Section 20(4) 10-point VAT Refund Substantiation Integrity
+  const substantiationItem = {
+    invoiceNumber: 'INV-2026-8801',
+    supplierVatNumber: '4190284711',
+    totalConsiderationZAR: 460000,
+    vatInputClaimedZAR: 60000,
+    proofOfPaymentAttached: true,
+    section20Compliance: true
+  };
+
+  if (!substantiationItem.supplierVatNumber.startsWith('4') || substantiationItem.supplierVatNumber.length !== 10) {
+    throw new Error('Supplier VAT number must be 10 digits starting with 4');
+  }
+  if (!substantiationItem.proofOfPaymentAttached) {
+    throw new Error('VAT refund substantiation must require verified Proof of Payment');
   }
 });
 

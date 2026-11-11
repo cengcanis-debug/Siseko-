@@ -367,13 +367,13 @@ DQEBAQUAA4IBDwAwggEKAoIBAQC7rOqW8xV91k9L8P4mQ9A8bC2mD1xY5k8R9a7
     }
 
     const dossierText = `================================================================================
-REPUBLIC OF SOUTH AFRICA • SOUTH AFRICAN REVENUE SERVICE
-CERTIFICATE OF ISV DIRECT GATEWAY ACCREDITATION
-Accreditation Reference: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.accreditationNumber}
-Statutory Reference: Tax Administration Act No. 28 of 2011 Section 255
+REPUBLIC OF SOUTH AFRICA • SARS ISV ONBOARDING APPLICATION
+CANDIDATE DOSSIER: ISV DIRECT GATEWAY ONBOARDING & TESTING
+Candidate Application Ref: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.accreditationNumber}
+Statutory Reference: Tax Administration Act No. 28 of 2011 Section 255 (Evaluation)
 Government Gazette Notice: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.gazetteNoticeRef}
 ================================================================================
-Accredited Entity: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.entityName}
+Applicant Candidate Entity: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.entityName}
 CIPC Registration: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.cipcRegistration}
 Director: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.directorName || 'V Zenzile'}
 Lead Developer: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.leadDeveloper || 'S Cengcani'}
@@ -383,13 +383,13 @@ Public Officer: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.publicOfficerName} ($
 Issue Date: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.issuedDate}
 Valid Through: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.validThrough}
 
-ACCREDITED STATUTORY SCOPE:
+CANDIDATE STATUTORY SCOPE UNDER TEST:
 ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.accreditedModules.map(m => `- ${m}`).join('\n')}
 
 CRYPTOGRAPHIC VERIFICATION SEAL:
 ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.cryptographicVerificationSeal}
 Hardware Signing Key: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.digitalSigningKeyId}
-SARS Signoff: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.sarsExcoSignoff}
+Evaluation Notice: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.sarsExcoSignoff}
 ================================================================================`;
 
     downloadBlobFile(
@@ -598,7 +598,7 @@ SARS Signoff: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.sarsExcoSignoff}
             <span>SARS ISV Direct Gateway Accreditation Roadmap</span>
             <span>
               {stages.every(s => s.status === 'COMPLETED') 
-                ? 'All 5 Stages Completed (100% Accredited)' 
+                ? 'All 5 Preparation Gates Completed (Sandbox Verified)' 
                 : `Current Progress: Stage ${currentActiveStage.id} of 5 (${currentActiveStage.progressPercentage}%)`}
             </span>
           </div>
@@ -825,10 +825,10 @@ SARS Signoff: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.sarsExcoSignoff}
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span>100% STATUTORY COMPLIANCE: All 8 Certificates Verified & Active in Vault!</span>
+                  <span>TESTING READINESS: All 8 Pre-requisite Certificates Prepared in Sandbox Vault!</span>
                 </div>
                 <p className="text-xs text-white/70">
-                  Solar CoC attestation confirmed and SARS Production Digital Signing Key provisioned in Cloud HSM. Ready for Live Production Ingress.
+                  Solar CoC attestation confirmed and candidate digital signing key prepared in Cloud HSM sandbox. Ready for SARS ISV Sandbox Onboarding evaluation.
                 </p>
               </div>
 
@@ -838,7 +838,7 @@ SARS Signoff: ${DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER.sarsExcoSignoff}
                 id="view-prod-dossier-callout-btn"
               >
                 <Award className="w-3.5 h-3.5" />
-                <span>Open Production Accreditation Dossier</span>
+                <span>Open Candidate Accreditation Dossier</span>
               </button>
             </div>
           </div>

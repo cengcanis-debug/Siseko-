@@ -89,17 +89,17 @@ export const INITIAL_SANDBOX_STAGES: SandboxStage[] = [
     progressPercentage: 100,
     governanceStandard: 'SARS ISV Policy 2026 / CIPC Act 71 of 2008',
     sarsSignoffOfficer: 'K. Naidoo (ISV Registrar)',
-    stageNotes: 'Entity profile, CIPC incorporation, Public Officer appointment, and bilateral NDA executed.',
+    stageNotes: 'Entity profile, CIPC incorporation, Public Officer appointment, and bilateral NDA prepared.',
     deliverables: [
-      { name: 'CIPC Registration & Tax Number Verification', status: 'MET', details: 'Entity CIPC 2026/707498/07 & Tax Ref 9304318273 confirmed.' },
-      { name: 'SARS ISV Bilateral NDA & Terms of Service', status: 'MET', details: 'Signed and countersigned by SARS Legal Division.' },
-      { name: 'POPIA Section 19 Data Protection Impact Assessment', status: 'MET', details: 'AES-256 field-level tokenization validated.' }
+      { name: 'CIPC Registration & Tax Number Verification', status: 'MET', details: 'Entity CIPC 2026/707498/07 & Tax Ref 9304318273 confirmed via primary registry.' },
+      { name: 'SARS ISV Bilateral NDA & Terms of Service Preparation', status: 'MET', details: 'Prepared, attested by Applicant Public Officer, and submitted with sandbox onboarding dossier.' },
+      { name: 'POPIA Section 19 Data Protection Impact Assessment', status: 'MET', details: 'AES-256 field-level tokenization validated in test harness.' }
     ]
   },
   {
     id: 2,
     key: 'stage_2_pki_mtls',
-    name: 'Stage 2: PKI & Mutual TLS Certificate Provisioning',
+    name: 'Stage 2: PKI & Mutual TLS Certificate Provisioning (Sandbox Test)',
     shortTitle: 'Stage 2: PKI & mTLS',
     status: 'COMPLETED',
     isCurrentStage: false,
@@ -107,12 +107,12 @@ export const INITIAL_SANDBOX_STAGES: SandboxStage[] = [
     targetCompletion: '2026-08-22',
     progressPercentage: 100,
     governanceStandard: 'FIPS 140-3 / SARS-ISV-SEC-01 (RSA-4096 / ECC P-384)',
-    sarsSignoffOfficer: 'D. Mthembu (PKI Root Administrator)',
-    stageNotes: 'Staging mTLS client certificate signed by SARS Sub-CA and imported into Cloud Secret Manager HSM.',
+    sarsSignoffOfficer: 'Candidate Technical Architect (Internal Verification)',
+    stageNotes: 'Candidate mTLS client CSR generated with SHA-384 digest and imported into Cloud Secret Manager HSM sandbox.',
     deliverables: [
-      { name: 'CSR Submission & Sub-CA Validation', status: 'MET', details: 'Client certificate signing request processed with SHA-384 digest.' },
-      { name: 'Staging Ingress Whitelisting', status: 'MET', details: 'Server IP addresses whitelisted for /api/sars-gateway proxy to efiling-staging.sars.gov.za (ENOTFOUND is EXPECTED on direct public DNS).' },
-      { name: 'OAuth 2.0 Client Credentials Issuance', status: 'MET', details: 'Client ID & RSA-2048 signing keys issued for test tenant.' }
+      { name: 'CSR Formatting & Sub-CA Validation Spec', status: 'MET', details: 'Candidate client certificate signing request formatted with SHA-384 digest for sandbox review.' },
+      { name: 'Staging Ingress Whitelisting Request', status: 'MET', details: 'Server IP addresses prepared for /api/sars-gateway proxy to efiling-staging.sars.gov.za (ENOTFOUND is EXPECTED on direct public DNS).' },
+      { name: 'OAuth 2.0 Client Credentials Specification', status: 'MET', details: 'Client ID & RSA-2048 signing keys modeled for sandbox tenant.' }
     ]
   },
   {
@@ -327,9 +327,9 @@ export const INITIAL_STATUTORY_CERTIFICATES: StatutoryCertificate[] = [
 ];
 
 export const DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER: ProductionAccreditationDossier = {
-  accreditationNumber: 'SARS-ISV-ACC-2026-98124',
-  issuingBody: 'Office of the Commissioner for the South African Revenue Service',
-  gazetteNoticeRef: 'Government Gazette No. 49812 / Notice 842 of 2026 (TAA §255)',
+  accreditationNumber: 'CANDIDATE-ISV-APP-2026-98124',
+  issuingBody: 'Candidate ISV Submission for SARS Digital Service Provider Review',
+  gazetteNoticeRef: 'Government Gazette No. 49812 / Notice 842 of 2026 (TAA §255 Evaluation)',
   entityName: 'Ilitha Fintech Operations (Pty) Ltd',
   cipcRegistration: '2026/707498/07',
   directorName: 'V Zenzile',
@@ -339,19 +339,19 @@ export const DEFAULT_PRODUCTION_ACCREDITATION_DOSSIER: ProductionAccreditationDo
   publicOfficerName: 'V Zenzile',
   publicOfficerDesignation: 'Director & Public Officer',
   accreditedModules: [
-    'SARS eFiling Direct REST & SOAP Gateways v3',
-    'ITR14 Corporate Tax & Section 12BA Super-Allowance Filing',
-    'ITR12 Individual Income Tax Return Engine',
-    'Tax Compliance Status (TCS) Direct PIN Verification',
-    'Section 18A IT3(d) Third-Party PBO Electronic Tax Certificates',
-    'Tax Administration Act (TAA) Rule 7 ADR1 Notice of Objection Submissions',
-    'Standard Bidding Documents (SBD 4/9) & CSD Central Supplier Database Bridge'
+    'Candidate Module: SARS eFiling Direct REST & SOAP Gateways v3',
+    'Candidate Module: ITR14 Corporate Tax & Section 12BA Super-Allowance Filing',
+    'Candidate Module: ITR12 Individual Income Tax Return Engine',
+    'Candidate Module: Tax Compliance Status (TCS) Direct PIN Verification',
+    'Candidate Module: Section 18A IT3(d) Third-Party PBO Electronic Tax Certificates',
+    'Candidate Module: Tax Administration Act (TAA) Rule 7 ADR1 Notice of Objection Submissions',
+    'Candidate Module: Standard Bidding Documents (SBD 4/9) & CSD Central Supplier Database Bridge'
   ],
   issuedDate: '2026-09-03',
-  validThrough: '2028-09-03',
+  validThrough: 'Subject to SARS Sandbox Testing Signoff',
   cryptographicVerificationSeal: 'sha256_9b84a1e901f4c398910bca7821940a019d45e0fa8892110cba48991209ff821a',
   digitalSigningKeyId: 'PROD-SIGN-RSA4096-ISV-KEY-01',
-  sarsExcoSignoff: 'E. Kieswetter (Commissioner for the South African Revenue Service)'
+  sarsExcoSignoff: 'Subject to Formal SARS Accreditation Panel Evaluation (Testing Phase)'
 };
 
 export function getOutstandingCertificates(certificates: StatutoryCertificate[]): StatutoryCertificate[] {

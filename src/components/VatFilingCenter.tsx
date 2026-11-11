@@ -22,12 +22,14 @@ import {
   Building2,
   FileText,
   BadgeAlert,
-  Camera
+  Camera,
+  Banknote
 } from 'lucide-react';
 import { UserTaxProfile, RoleType, Vat201Declaration, InvoiceRecord } from '../types';
 import { formatZAR } from '../utils/taxCalculations';
 import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
 import { VatOcrScannerPanel } from './VatOcrScannerPanel';
+import { VatRefundManager } from './VatRefundManager';
 
 interface VatFilingCenterProps {
   profile: UserTaxProfile;
@@ -62,7 +64,7 @@ export const VatFilingCenter: React.FC<VatFilingCenterProps> = ({
   const [customsVatPaid, setCustomsVatPaid] = useState<number>(7800); // Customs SAD500
 
   // Submission & Lodgement State
-  const [activeVatView, setActiveVatView] = useState<'lodgement' | 'ocr_invoices'>('lodgement');
+  const [activeVatView, setActiveVatView] = useState<'lodgement' | 'ocr_invoices' | 'vat_refund'>('lodgement');
   const [isLodging, setIsLodging] = useState<boolean>(false);
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [lodgedDeclaration, setLodgedDeclaration] = useState<Vat201Declaration | null>(null);
@@ -348,7 +350,7 @@ export const VatFilingCenter: React.FC<VatFilingCenterProps> = ({
       </div>
 
       {/* INTEGRATED VAT VIEW SELECTOR TABS (ZERO OVERLAPS & ZERO REPETITIONS) */}
-      <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-2">
         <button
           onClick={() => setActiveVatView('lodgement')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
@@ -375,9 +377,40 @@ export const VatFilingCenter: React.FC<VatFilingCenterProps> = ({
           <span>Integrated OCR Invoice Scanner (Section 20(4))</span>
           <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200 font-bold">Auto-Syncs Input Tax</span>
         </button>
+
+        <button
+          onClick={() => setActiveVatView('vat_refund')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            activeVatView === 'vat_refund'
+              ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'
+          }`}
+          id="vat-tab-refund-btn"
+        >
+          <Banknote className="w-4 h-4 text-teal-400" />
+          <span>Client VAT Refund Hub (Sections 44 & 45)</span>
+          {netVatPayableOrRefund < 0 && (
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-teal-500/30 text-teal-200 font-bold">
+              Refund: {formatZAR(Math.abs(netVatPayableOrRefund))}
+            </span>
+          )}
+        </button>
       </div>
 
-      {activeVatView === 'ocr_invoices' ? (
+      {activeVatView === 'vat_refund' ? (
+        <div className="animate-fadeIn">
+          <VatRefundManager
+            profile={profile}
+            currentUserRole={currentUserRole}
+            netVatPosition={netVatPayableOrRefund}
+            activeTaxPeriod={taxPeriod}
+            vatRegistrationNumber={cleanVat}
+            onNavigateToLodgement={() => setActiveVatView('lodgement')}
+            showBanner={showBanner}
+            addAuditLog={addAuditLog}
+          />
+        </div>
+      ) : activeVatView === 'ocr_invoices' ? (
         <div className="animate-fadeIn">
           <VatOcrScannerPanel
             formatZAR={formatZAR}
@@ -467,6 +500,19 @@ export const VatFilingCenter: React.FC<VatFilingCenterProps> = ({
           <p className="text-xs text-white/60">
             Payment due date: <span className="text-white font-bold">31 March 2026</span> (eFiling electronic submission window).
           </p>
+          {netVatPayableOrRefund < 0 && (
+            <div className="pt-1">
+              <button
+                onClick={() => setActiveVatView('vat_refund')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold rounded-xl text-xs transition cursor-pointer shadow-md"
+                id="goto-refund-hub-btn"
+              >
+                <Banknote className="w-3.5 h-3.5" />
+                <span>Open Client VAT Refund Hub (Track 21-Day Payout & Sec 45 Interest)</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-4 text-xs font-mono">

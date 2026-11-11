@@ -72,14 +72,14 @@ export const ProductionLaunchCockpit: React.FC<ProductionLaunchCockpitProps> = (
   const launchPillars = [
     {
       id: 'overview',
-      title: 'Tax Ledger & Directive8 Safe Register',
+      title: 'General Tax Ledger & Internal Register',
       category: 'Core Compliance',
       description: 'Unified real-time transaction ledger, Section 12E SBC bracket analysis, and provisional tax tracking.',
       icon: ShieldCheck,
       color: 'emerald',
       actionLabel: 'Open Tax Ledger',
       stat: `${formatZAR(liveNetLiability)} Net SARS Position`,
-      badge: 'FICA Verified'
+      badge: 'ID Logged'
     },
     {
       id: 'ai_assistant',
@@ -178,9 +178,9 @@ export const ProductionLaunchCockpit: React.FC<ProductionLaunchCockpitProps> = (
               <span>•</span>
               <span className="text-slate-400">South Africa Tax Year 2026/2027</span>
               <span>•</span>
-              <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+              <span className="text-cyan-400 flex items-center gap-1 font-semibold">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                Directive8 Safe Register Active
+                Internal Due Diligence Register (Sandbox Testing)
               </span>
             </div>
 
@@ -193,6 +193,16 @@ export const ProductionLaunchCockpit: React.FC<ProductionLaunchCockpitProps> = (
               Tax Administration Act (TAA) Rule 7 objection drafting, automated VAT201 apportionment, and secure
               Section 240 practitioner collaboration.
             </p>
+
+            {/* STATUTORY REGULATORY NOTICE */}
+            <div className="bg-amber-950/30 border border-amber-500/30 px-3.5 py-2 rounded-xl flex flex-wrap items-center gap-2 text-xs text-amber-200/90 font-medium">
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold uppercase">
+                Regulatory Notice
+              </span>
+              <span>
+                Candidate ISV Software in Sandbox Testing. Not endorsed, approved, or sanctioned by the South African Revenue Service (SARS) or the Financial Intelligence Centre (FIC).
+              </span>
+            </div>
 
             {/* Quick stats unboxed metadata row */}
             <div className="pt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">

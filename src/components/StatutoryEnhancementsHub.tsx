@@ -32,6 +32,7 @@ import {
 import { UserTaxProfile, RoleType } from '../types';
 import { formatZAR } from '../utils/taxCalculations';
 import { downloadBlobFile, generateSubmissionRef } from '../utils/systemBridge';
+import { PenaltyCalculator } from './PenaltyCalculator';
 
 interface StatutoryEnhancementsHubProps {
   profile: UserTaxProfile;
@@ -58,7 +59,7 @@ export const StatutoryEnhancementsHub: React.FC<StatutoryEnhancementsHubProps> =
 }) => {
   // Active sub-tab
   const [activeSubTab, setActiveSubTab] = useState<
-    's13sex' | 's11d' | 's24c' | 's12ba' | 's6quat' | 'debt_concessions' | 'advanced_concessions' | 's12h'
+    's13sex' | 's11d' | 's12h' | 's12ba' | 's24c' | 's6quat' | 'debt_concessions' | 'advanced_concessions' | 'penalty_calculator'
   >('s13sex');
 
   // Local working state for Section 13sex
@@ -590,6 +591,18 @@ export const StatutoryEnhancementsHub: React.FC<StatutoryEnhancementsHubProps> =
           >
             <Layers className="w-4 h-4 text-cyan-400" />
             <span>Phase 12 Corporate Concessions</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('penalty_calculator')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeSubTab === 'penalty_calculator'
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
+                : 'text-slate-400 hover:text-white bg-white/5'
+            }`}
+          >
+            <Percent className="w-4 h-4 text-amber-400" />
+            <span>Late Payment Penalties & Interest (§187)</span>
           </button>
         </div>
 
@@ -2041,6 +2054,19 @@ export const StatutoryEnhancementsHub: React.FC<StatutoryEnhancementsHubProps> =
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* SUBTAB 9: LATE PAYMENT PENALTIES & PRESCRIBED INTEREST (TAA §187-§189 & §213) */}
+        {activeSubTab === 'penalty_calculator' && (
+          <div className="space-y-6">
+            <PenaltyCalculator
+              initialOverdueAmount={profile.netTaxLiabilityOrRefund && profile.netTaxLiabilityOrRefund > 0 ? profile.netTaxLiabilityOrRefund : 45000}
+              initialTaxType={profile.isCorporate ? 'CORPORATE_ITR14' : 'PROVISIONAL_TAX'}
+              showBanner={showBanner}
+              onNavigateToVdp={onNavigateToVdp}
+              onNavigateToTaxPro={onNavigateToTaxPro}
+            />
           </div>
         )}
 

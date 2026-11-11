@@ -494,6 +494,50 @@ export interface Vat201Declaration {
   notes?: string;
 }
 
+export type VatRefundStatus = 
+  | 'PENDING_INITIAL_REVIEW' 
+  | 'UNDER_SARS_AUDIT' 
+  | 'DOCUMENTS_SUBMITTED' 
+  | 'APPROVED_FOR_PAYMENT' 
+  | 'SET_OFF_APPLIED' 
+  | 'PAID_TO_BANK';
+
+export interface VatRefundAuditItem {
+  invoiceNumber: string;
+  supplierName: string;
+  supplierVatNumber: string;
+  date: string;
+  description: string;
+  totalConsiderationZAR: number;
+  vatInputClaimedZAR: number;
+  proofOfPaymentAttached: boolean;
+  section20Compliance: boolean;
+}
+
+export interface VatRefundClaim {
+  id: string;
+  claimRef: string;
+  taxPeriod: string;
+  vatRegistrationNumber: string;
+  vendorName: string;
+  refundAmountZAR: number;
+  lodgedDate: string;
+  statutoryDeadlineDate: string; // 21 business days post-lodgement under VAT Act §44(1)
+  businessDaysElapsed: number;
+  status: VatRefundStatus;
+  sarsAuditCaseNo?: string;
+  bankDetailsVerified: boolean; // TAA §190(2)
+  bankName: string;
+  bankAccountMasked: string;
+  taa191SetOffAmountZAR?: number; // Amount set off against other tax debts under TAA §191
+  netPayoutAmountZAR: number;
+  delayedDays: number; // Days past 21-business-day statutory window
+  prescribedInterestOwedBySars: number; // VAT Act §45 interest at SARS Prescribed Rate (11.75%)
+  supportingInvoicesCount: number;
+  auditPackReady: boolean;
+  notes?: string;
+}
+
 export interface AiDeductionSuggestion {
   id: string;
   title: string;
