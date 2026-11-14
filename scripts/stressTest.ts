@@ -3,7 +3,19 @@
  * Stress-tests statutory calculation engines, POPIA cryptography, RBAC matrices, and high-load ledger simulations.
  */
 
-import { isRoleAuthorized, getRoleScopes } from '../src/utils/sessionSecurity';
+import {
+  isRoleAuthorized,
+  getRoleScopes,
+  getDefaultPermissionsForRole,
+  getScopesFromPermissions,
+  hasEntityAccess,
+  filterAuthorizedEntities
+} from '../src/utils/sessionSecurity';
+import {
+  INITIAL_BUSINESS_ENTITIES,
+  INITIAL_TEAM_MEMBERS,
+  INITIAL_SUBMISSION_APPROVALS
+} from '../src/data/multiEntityData';
 import { 
   maskName, 
   maskEmail, 
@@ -24,6 +36,11 @@ import {
 } from '../src/utils/automatedTaggingEngine';
 import { loadAppConfig, validateEnvironment, maskEnvSecret } from '../src/utils/envConfig';
 import { SarsApiService } from '../src/services/sarsApiService';
+import {
+  getLastBusinessDayOfMonth,
+  getEmp201DueDate,
+  getUpcomingTaxDeadlines
+} from '../src/utils/taxDeadlines';
 import crypto from 'crypto';
 
 interface TestResult {
@@ -1038,6 +1055,217 @@ recordTest('VAT_REFUND_AND_SECTION_45', 'Section 44 21-day timeline, Section 45 
   }
   if (!substantiationItem.proofOfPaymentAttached) {
     throw new Error('VAT refund substantiation must require verified Proof of Payment');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SUITE 16: MULTI-ENTITY WORKSPACE ISOLATION & GRANULAR USER PERMISSIONS
+// ---------------------------------------------------------------------------
+console.log('▶ [16/16] Executing Multi-Entity Isolation & Granular RBAC Permission Tests...');
+recordTest('MULTI_ENTITY_AND_RBAC_PERMISSIONS', 'Distinct entity snapshots, custom RBAC overrides, entity access & approval queue', () => {
+  // Test 1: Multi-Entity Data Isolation (>= 3 distinct SA entities with unique tax snapshots)
+  if (INITIAL_BUSINESS_ENTITIES.length < 3) {
+    throw new Error(`Expected at least 3 initial business entities, found ${INITIAL_BUSINESS_ENTITIES.length}`);
+  }
+
+  const taxNumbers = new Set(INITIAL_BUSINESS_ENTITIES.map(e => e.profile.sarsTaxNumber));
+  const cipcNumbers = new Set(INITIAL_BUSINESS_ENTITIES.map(e => e.profile.registrationNumber));
+  if (taxNumbers.size !== INITIAL_BUSINESS_ENTITIES.length) {
+    throw new Error('Business entities must maintain unique SARS Tax Reference numbers');
+  }
+  if (cipcNumbers.size !== INITIAL_BUSINESS_ENTITIES.length) {
+    throw new Error('Business entities must maintain unique CIPC registration numbers');
+  }
+
+  const ilithaSnap = generateLiveTaxSnapshot(
+    INITIAL_BUSINESS_ENTITIES[0].transactions,
+    INITIAL_BUSINESS_ENTITIES[0].invoices,
+    INITIAL_BUSINESS_ENTITIES[0].profile
+  );
+  const kalahariSnap = generateLiveTaxSnapshot(
+    INITIAL_BUSINESS_ENTITIES[1].transactions,
+    INITIAL_BUSINESS_ENTITIES[1].invoices,
+    INITIAL_BUSINESS_ENTITIES[1].profile
+  );
+  if (ilithaSnap.grossIncome === kalahariSnap.grossIncome) {
+    throw new Error('Entity ledgers failed isolation check: identical gross income across distinct entities');
+  }
+
+  // Test 2: Granular Role Defaults & Custom Overrides
+  const auditorDefault = getDefaultPermissionsForRole('Auditor');
+  if (auditorDefault.canEditTransactions || auditorDefault.canApproveSubmissions || !auditorDefault.canViewTaxProjections) {
+    throw new Error('Auditor default must enforce View-Only without data entry or submission approval');
+  }
+
+  const bookkeeperDefault = getDefaultPermissionsForRole('Bookkeeper');
+  if (!bookkeeperDefault.canEditTransactions || bookkeeperDefault.canApproveSubmissions || bookkeeperDefault.canManageEntities) {
+    throw new Error('Bookkeeper default must enforce Data Entry without Submission Approval or Entity Management');
+  }
+
+  const customGrantApproval = {
+    ...getDefaultPermissionsForRole('Custom'),
+    canViewTaxProjections: true,
+    canEditTransactions: false,
+    canApproveSubmissions: true
+  };
+  if (isRoleAuthorized('Custom', 'canDataEntry', customGrantApproval)) {
+    throw new Error('Custom permission override failed: canDataEntry should be false');
+  }
+  if (!isRoleAuthorized('Custom', 'canApproveSubmissions', customGrantApproval)) {
+    throw new Error('Custom permission override failed: canApproveSubmissions should be true');
+  }
+  const derivedScopes = getScopesFromPermissions(customGrantApproval, 'Custom');
+  if (!derivedScopes.includes('sars:submissions:approve')) {
+    throw new Error('Derived scopes missing sars:submissions:approve for Custom approver');
+  }
+
+  // Test 3: Per-Entity Assignment & Suspended User Enforcement
+  const owner = INITIAL_TEAM_MEMBERS.find(m => m.role === 'Owner')!;
+  const bookkeeper = INITIAL_TEAM_MEMBERS.find(m => m.role === 'Bookkeeper')!;
+  if (!hasEntityAccess(owner, 'ent-tablebay-freight')) {
+    throw new Error('Owner assigned to ALL entities must have access to ent-tablebay-freight');
+  }
+  if (!hasEntityAccess(bookkeeper, 'ent-kalahari-solar')) {
+    throw new Error('Bookkeeper should have access to assigned ent-kalahari-solar');
+  }
+  if (hasEntityAccess(bookkeeper, 'ent-tablebay-freight')) {
+    throw new Error('Bookkeeper must be blocked from unassigned ent-tablebay-freight');
+  }
+  const suspendedMember = { ...owner, status: 'Suspended' as const };
+  if (hasEntityAccess(suspendedMember, 'ent-ilitha-fintech')) {
+    throw new Error('Suspended team members must be denied entity workspace access');
+  }
+
+  // Test 4: Submission Approval Queue Enforcement
+  const pendingReq = INITIAL_SUBMISSION_APPROVALS.find(r => r.status === 'PENDING_APPROVAL');
+  if (!pendingReq) {
+    throw new Error('Expected at least one initial PENDING_APPROVAL submission request');
+  }
+  if (isRoleAuthorized('Bookkeeper', 'canApproveSubmissions')) {
+    throw new Error('Bookkeeper must not be allowed to transition submission approvals');
+  }
+  if (!isRoleAuthorized('Accountant', 'canApproveSubmissions')) {
+    throw new Error('Accountant must be permitted to approve queued statutory submissions');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SUITE 17: CROSS-MODULE MULTI-USER PERMISSIONS & ENTITY-SCOPED CONSOLIDATED EXPORT
+// ---------------------------------------------------------------------------
+console.log('▶ [17/17] Executing Cross-Module Multi-User Permissions & Approval Workflow Stress Test...');
+recordTest('CROSS_MODULE_MULTI_USER_PERMISSIONS', 'OCR alias checks, EMP501/ADR1/VDP gating, authorized entity filtering & end-to-end transitions', () => {
+  // Test 1: Cross-module alias consistency (approve_invoices vs canApproveInvoices)
+  const customBookkeeperWithOcrApprove = {
+    ...getDefaultPermissionsForRole('Bookkeeper'),
+    canApproveInvoices: true
+  };
+  if (!isRoleAuthorized('Custom', 'approve_invoices', customBookkeeperWithOcrApprove)) {
+    throw new Error('Custom user granted canApproveInvoices failed approve_invoices alias check');
+  }
+  if (isRoleAuthorized('Bookkeeper', 'approve_invoices')) {
+    throw new Error('Standard Bookkeeper must remain blocked from approve_invoices');
+  }
+
+  // Test 2: View-Only Auditor blocked from EMP501 submission, ADR1 dispute filing, and VDP dispatch
+  if (isRoleAuthorized('Auditor', 'canApproveSubmissions')) {
+    throw new Error('Auditor must be blocked from EMP501/VAT201/VDP submissions');
+  }
+  if (isRoleAuthorized('Auditor', 'canManageDisputes')) {
+    throw new Error('Auditor must be blocked from filing ADR1 disputes');
+  }
+  if (!isRoleAuthorized('Auditor', 'canDownloadCSV')) {
+    throw new Error('Auditor must retain CSV export access for statutory audit trails');
+  }
+
+  // Test 3: Entity-scoped consolidated export isolation (1,000 iterations)
+  const bookkeeperMember = INITIAL_TEAM_MEMBERS.find(m => m.role === 'Bookkeeper')!;
+  const auditorMember = INITIAL_TEAM_MEMBERS.find(m => m.role === 'Auditor')!;
+  const ownerMember = INITIAL_TEAM_MEMBERS.find(m => m.role === 'Owner')!;
+
+  for (let i = 0; i < 1000; i++) {
+    const bkEntities = filterAuthorizedEntities(INITIAL_BUSINESS_ENTITIES, bookkeeperMember);
+    const audEntities = filterAuthorizedEntities(INITIAL_BUSINESS_ENTITIES, auditorMember);
+    const ownEntities = filterAuthorizedEntities(INITIAL_BUSINESS_ENTITIES, ownerMember);
+
+    if (bkEntities.some(e => e.id === 'ent-tablebay-freight')) {
+      throw new Error('Bookkeeper leaked access to unassigned ent-tablebay-freight in consolidated filter');
+    }
+    if (audEntities.some(e => e.id === 'ent-kalahari-solar')) {
+      throw new Error('Auditor leaked access to unassigned ent-kalahari-solar in consolidated filter');
+    }
+    if (ownEntities.length !== INITIAL_BUSINESS_ENTITIES.length) {
+      throw new Error(`Owner should access all ${INITIAL_BUSINESS_ENTITIES.length} active entities`);
+    }
+  }
+
+  // Test 4: End-to-End Multi-User Approval State Machine (Bookkeeper Prepare -> Custom Approver Sign-off)
+  const customApproverPerms = {
+    ...getDefaultPermissionsForRole('Custom'),
+    canViewTaxProjections: true,
+    canApproveSubmissions: true,
+    canManageDisputes: true
+  };
+
+  if (!isRoleAuthorized('Bookkeeper', 'canEditTransactions')) {
+    throw new Error('Bookkeeper must be able to prepare draft returns');
+  }
+  if (isRoleAuthorized('Bookkeeper', 'canApproveSubmissions')) {
+    throw new Error('Bookkeeper must NOT be able to self-approve queued draft returns');
+  }
+  if (!isRoleAuthorized('Custom', 'canApproveSubmissions', customApproverPerms)) {
+    throw new Error('Custom approver must be authorized to approve queued EMP501/VAT201/ADR1/VDP submissions');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SUITE 18: SARS STATUTORY DEADLINES & HEADER ALERT BELL ENGINE
+// ---------------------------------------------------------------------------
+console.log('▶ [18/18] Executing SARS Statutory Deadlines & Header Alert Bell Stress Test...');
+recordTest('TAX_DEADLINE_ALERTS', 'VAT201 last-business-day, EMP201 7th rollback, FYE-aware IRP6 & pending approvals', () => {
+  // Test 1: Last business day calculation handles weekend month-ends (e.g., Jan 2026: Jan 31 is Sat -> Fri Jan 30)
+  const janLastBiz = getLastBusinessDayOfMonth(2026, 0);
+  if (janLastBiz.getDate() !== 30 || janLastBiz.getDay() !== 5) {
+    throw new Error(`Expected Jan 2026 last business day to be Fri 30, got day=${janLastBiz.getDate()} dow=${janLastBiz.getDay()}`);
+  }
+
+  // Test 2: EMP201 7th-of-month weekend rollback (Nov 2026: Nov 7 is Sat -> Fri Nov 6)
+  const novEmp201 = getEmp201DueDate(2026, 10);
+  if (novEmp201.getDate() !== 6 || novEmp201.getDay() !== 5) {
+    throw new Error(`Expected Nov 2026 EMP201 due date to roll back to Fri 6, got day=${novEmp201.getDate()} dow=${novEmp201.getDay()}`);
+  }
+
+  // Test 3: Entity-aware VAT & FYE IRP6 deadlines for reference date 2026-11-14
+  const refDate = new Date(2026, 10, 14);
+  const ilitha = INITIAL_BUSINESS_ENTITIES[0]; // Feb FYE, VAT registered
+  const tableBay = INITIAL_BUSINESS_ENTITIES[2]; // Jun FYE, VAT registered
+
+  const ilithaDeadlines = getUpcomingTaxDeadlines(ilitha, 2, refDate);
+  const tableBayDeadlines = getUpcomingTaxDeadlines(tableBay, 0, refDate);
+
+  const ilithaVat = ilithaDeadlines.find(d => d.taxType === 'VAT201');
+  if (!ilithaVat || ilithaVat.targetTab !== 'vat201_lodgement' || ilithaVat.dueDate !== '2026-11-30') {
+    throw new Error(`Expected Ilitha Nov VAT201 due 2026-11-30, got ${ilithaVat?.dueDate}`);
+  }
+
+  const ilithaApproval = ilithaDeadlines.find(d => d.taxType === 'APPROVAL');
+  if (!ilithaApproval || ilithaApproval.urgency !== 'critical' || ilithaApproval.targetTab !== 'multi_entity_access') {
+    throw new Error('Expected critical pending approval alert routing to multi_entity_access');
+  }
+
+  const tbIrp6 = tableBayDeadlines.find(d => d.taxType === 'IRP6');
+  if (!tbIrp6 || tbIrp6.dueDate !== '2026-12-31') {
+    throw new Error(`Expected Table Bay (June FYE) 1st IRP6 due 2026-12-31, got ${tbIrp6?.dueDate}`);
+  }
+
+  // Test 4: Non-VAT registered entity excludes VAT201 deadline
+  const nonVatEntity = {
+    ...ilitha,
+    id: 'ent-non-vat',
+    profile: { ...ilitha.profile, vatRegistered: false }
+  };
+  const nonVatDeadlines = getUpcomingTaxDeadlines(nonVatEntity, 0, refDate);
+  if (nonVatDeadlines.some(d => d.taxType === 'VAT201')) {
+    throw new Error('Non-VAT registered entity must not generate VAT201 deadline alerts');
   }
 });
 

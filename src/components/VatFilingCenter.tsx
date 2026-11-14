@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Receipt, 
   Send, 
@@ -38,6 +38,7 @@ interface VatFilingCenterProps {
   checkPermission: (action: string) => boolean;
   addAuditLog: (action: string, details: string, severity?: 'info' | 'warn' | 'crit') => void;
   showBanner: (msg: string) => void;
+  onSubmitForApproval?: (details: { taxPeriod: string; netAmount: number }) => void;
 }
 
 export const VatFilingCenter: React.FC<VatFilingCenterProps> = ({
@@ -45,10 +46,15 @@ export const VatFilingCenter: React.FC<VatFilingCenterProps> = ({
   currentUserRole,
   checkPermission,
   addAuditLog,
-  showBanner
+  showBanner,
+  onSubmitForApproval
 }) => {
   // VAT Registration State
   const [vatNumber, setVatNumber] = useState<string>(profile.vatNumber || '4920184719');
+  useEffect(() => {
+    setVatNumber(profile.vatNumber || '4920184719');
+    setLodgedDeclaration(null);
+  }, [profile.vatNumber, profile.name]);
   const [taxPeriod, setTaxPeriod] = useState<string>('2026/02 - Category B (Bimonthly: Jan-Feb)');
   
   // Output Tax Fields
@@ -71,8 +77,9 @@ export const VatFilingCenter: React.FC<VatFilingCenterProps> = ({
 
   // Seamless OCR Approval handler: adds input VAT directly into VAT201 return
   const handleApproveOcrInvoice = (scannedInvoice: Partial<InvoiceRecord>) => {
-    if (currentUserRole !== 'Owner' && currentUserRole !== 'Accountant') {
+    if (!checkPermission('canApproveInvoices')) {
       showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot approve scanned invoices.`);
+      addAuditLog('ACCESS_DENIED_APPROVE_INVOICE', `Unauthorized attempt by ${currentUserRole} to approve scanned invoice ${scannedInvoice.invoiceNumber || 'NEW'}.`, 'warn');
       return;
     }
     const vatAmount = Number(scannedInvoice.vatAmount || 0);
@@ -122,10 +129,14 @@ export const VatFilingCenter: React.FC<VatFilingCenterProps> = ({
     { id: 10, title: 'Section 17 Apportionment', detail: 'Turnover apportionment ratio applied to mixed taxable/exempt operational supplies', compliant: apportionmentRatio === 100 || apportionmentRatio > 0 }
   ];
 
+  const canApproveSubmission = checkPermission('canApproveSubmissions') || checkPermission('canFileSARS');
+  const canEditData = checkPermission('canEditTransactions');
+
   // Execute SARS Lodgement
   const handleLodgeVat201 = async () => {
-    if (currentUserRole !== 'Owner' && currentUserRole !== 'Accountant' && currentUserRole !== 'Auditor') {
-      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot lodge statutory VAT201 returns with SARS.`);
+    if (!canApproveSubmission) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" lacks Submission Approval permission to lodge VAT201 returns with SARS.`);
+      addAuditLog('ACCESS_DENIED_VAT201_LODGE', `Unauthorized VAT201 lodgement attempt by ${currentUserRole}.`, 'warn');
       return;
     }
 
@@ -337,15 +348,32 @@ export const VatFilingCenter: React.FC<VatFilingCenterProps> = ({
             </button>
           )}
 
-          <button
-            onClick={() => setShowConfirmModal(true)}
-            disabled={isLodging || !isVatValid}
-            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
-            id="lodge-vat201-btn"
-          >
-            <Send className={`w-3.5 h-3.5 ${isLodging ? 'animate-spin' : ''}`} />
-            <span>{isLodging ? 'Transmitting to SARS...' : 'Lodge VAT201 with SARS'}</span>
-          </button>
+          {canApproveSubmission ? (
+            <button
+              onClick={() => setShowConfirmModal(true)}
+              disabled={isLodging || !isVatValid}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+              id="lodge-vat201-btn"
+            >
+              <Send className={`w-3.5 h-3.5 ${isLodging ? 'animate-spin' : ''}`} />
+              <span>{isLodging ? 'Transmitting to SARS...' : 'Lodge VAT201 with SARS'}</span>
+            </button>
+          ) : canEditData && onSubmitForApproval ? (
+            <button
+              onClick={() => onSubmitForApproval({ taxPeriod, netAmount: netVatPayableOrRefund })}
+              disabled={!isVatValid}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-lg cursor-pointer disabled:opacity-50"
+              id="submit-vat201-approval-btn"
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Submit VAT201 for Approval</span>
+            </button>
+          ) : (
+            <span className="px-3.5 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-xs font-medium inline-flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" />
+              <span>View-Only Access</span>
+            </span>
+          )}
         </div>
       </div>
 

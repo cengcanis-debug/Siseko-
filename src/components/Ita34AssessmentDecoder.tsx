@@ -25,8 +25,10 @@ interface Ita34AssessmentDecoderProps {
   formatZAR: (val: number) => string;
   addAuditLog: (action: string, details: string, severity?: 'info' | 'warn' | 'crit') => void;
   showBanner: (msg: string) => void;
+  checkPermission?: (action: string) => boolean;
   onNavigateToSentinel?: () => void;
   onNavigateToTaxPro?: () => void;
+  onSubmitForApproval?: (details: { noticeNo: string; sourceCode: string; amount: number }) => void;
 }
 
 export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
@@ -34,8 +36,10 @@ export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
   formatZAR,
   addAuditLog,
   showBanner,
+  checkPermission,
   onNavigateToSentinel,
-  onNavigateToTaxPro
+  onNavigateToTaxPro,
+  onSubmitForApproval
 }) => {
   const [assessmentNoticeNo, setAssessmentNoticeNo] = useState('ITA34-2026-98214');
   const [disallowedSourceCode, setDisallowedSourceCode] = useState('4015');
@@ -79,9 +83,27 @@ export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
     showBanner('🛡️ Audit-Ready Vault Verified: Logbook #789 and Purchase Agreement attached!');
   };
 
+  const canManageDisputes = checkPermission ? checkPermission('canManageDisputes') : true;
+  const canEditData = checkPermission ? checkPermission('canEditTransactions') : true;
+
   const handleDraftRule7Objection = () => {
+    if (!canManageDisputes && !canEditData) {
+      showBanner(`⛔ Access Denied: View-Only role (${profile.simulatedCurrentUserRole}) cannot draft or submit Rule 7 ADR1 objections.`);
+      addAuditLog('ACCESS_DENIED_RULE7_OBJECTION', `View-Only role ${profile.simulatedCurrentUserRole} attempted to draft ADR1 objection.`, 'warn');
+      return;
+    }
+
     if (!vaultLogbookVerified || !vaultPurchaseAgreementVerified) {
       showBanner('⚠️ Please corroborate Audit-Ready Vault evidence before drafting Rule 7 Notice.');
+      return;
+    }
+
+    if (!canManageDisputes && onSubmitForApproval) {
+      onSubmitForApproval({
+        noticeNo: assessmentNoticeNo,
+        sourceCode: disallowedSourceCode,
+        amount: originalClaimAmount
+      });
       return;
     }
 
@@ -308,7 +330,7 @@ export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
                 </button>
               )}
             </div>
-          ) : (
+          ) : canManageDisputes ? (
             <button
               onClick={handleDraftRule7Objection}
               className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
@@ -316,6 +338,19 @@ export const Ita34AssessmentDecoder: React.FC<Ita34AssessmentDecoderProps> = ({
               <FileText className="w-3.5 h-3.5" />
               <span>Draft ADR1 Rule 7 Notice of Objection</span>
             </button>
+          ) : canEditData && onSubmitForApproval ? (
+            <button
+              onClick={handleDraftRule7Objection}
+              className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Prepare ADR1 Objection for Approval</span>
+            </button>
+          ) : (
+            <div className="w-full py-2.5 px-3 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" />
+              <span>View-Only Access (Dispute Filing Restricted)</span>
+            </div>
           )}
 
           {/* REPO HEALTH & AUDIT SHORTCUT */}

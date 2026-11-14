@@ -50,28 +50,31 @@ import {
   AuditLogEntry,
   EntityProfile,
   TrustLoanAccount,
-  CategorizationRule
+  CategorizationRule,
+  RolePermissions,
+  TeamMember,
+  BusinessEntityWorkspace,
+  SubmissionApprovalRequest
 } from './types';
 
 import {
-  initialTaxProfile,
-  initialTransactions,
-  initialInvoices,
-  initialBankAccounts,
-  pendingMixedUseFeed,
-  initialCategorizationRules
-} from './data/mockData';
+  INITIAL_BUSINESS_ENTITIES,
+  INITIAL_TEAM_MEMBERS,
+  INITIAL_SUBMISSION_APPROVALS
+} from './data/multiEntityData';
 
 import {
   formatZAR,
-  generateLiveTaxSnapshot,
-  calculateSANormalTax
+  generateLiveTaxSnapshot
 } from './utils/taxCalculations';
 
 import {
   createDefaultSession,
   generateTokenHex,
+  getDefaultPermissionsForRole,
   getRoleScopes,
+  getScopesFromPermissions,
+  hasEntityAccess,
   isRoleAuthorized
 } from './utils/sessionSecurity';
 
@@ -83,7 +86,6 @@ import { PboDonationsSection18A } from './components/PboDonationsSection18A';
 import { EtiCalculatorPanel } from './components/EtiCalculatorPanel';
 import { SbcAdvisoryWizard } from './components/SbcAdvisoryWizard';
 import { TwoPotRetirementSimulator } from './components/TwoPotRetirementSimulator';
-import { VatOcrScannerPanel } from './components/VatOcrScannerPanel';
 import { AfsStatementsDrafter } from './components/AfsStatementsDrafter';
 import { Phase17SubscriptionAndTravelAuditor } from './components/Phase17SubscriptionAndTravelAuditor';
 import { Phase18DevOpsInfrastructure } from './components/Phase18DevOpsInfrastructure';
@@ -111,6 +113,8 @@ import { Emp501InterimReconciliation } from './components/Emp501InterimReconcili
 import { SarsAiTaxAssistant } from './components/SarsAiTaxAssistant';
 import { GlobalAiChatbotWidget } from './components/GlobalAiChatbotWidget';
 import { ProductionLaunchCockpit } from './components/ProductionLaunchCockpit';
+import { MultiEntityAccessHub } from './components/MultiEntityAccessHub';
+import { TaxDeadlineAlertBell } from './components/TaxDeadlineAlertBell';
 import { auditTransaction } from './utils/sarsPreAuditEngine';
 import { TransactionPreAuditResult } from './types';
 import { systemBus, downloadBlobFile, generateSubmissionRef } from './utils/systemBridge';
@@ -118,6 +122,7 @@ import { systemBus, downloadBlobFile, generateSubmissionRef } from './utils/syst
 type NavTab =
   | 'launch'
   | 'overview'
+  | 'multi_entity_access'
   | 'ai_assistant'
   | 'emp501_reconciliation'
   | 'tax_pro_connect'
@@ -149,9 +154,202 @@ type NavTab =
   | 'gamification';
 
 export default function App() {
-  // 1. Core Profile & Role State
-  const [profile, setProfile] = useState<UserTaxProfile>(initialTaxProfile);
-  const [currentUserRole, setCurrentUserRole] = useState<RoleType>('Owner');
+  // 1. Multi-Entity Workspaces, Team Access & Submission Approval Queue
+  const [entities, setEntities] = useState<BusinessEntityWorkspace[]>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('zatax_entities_v1');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      }
+    } catch {
+      // Fallback to initial entities
+    }
+    return INITIAL_BUSINESS_ENTITIES;
+  });
+
+  const [activeEntityId, setActiveEntityId] = useState<string>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem('zatax_active_entity_id_v1') || INITIAL_BUSINESS_ENTITIES[0].id;
+      }
+    } catch {
+      // Fallback
+    }
+    return INITIAL_BUSINESS_ENTITIES[0].id;
+  });
+
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('zatax_team_members_v1');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+    return INITIAL_TEAM_MEMBERS;
+  });
+
+  const [activeUserId, setActiveUserId] = useState<string>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem('zatax_active_user_id_v1') || INITIAL_TEAM_MEMBERS[0].id;
+      }
+    } catch {
+      // Fallback
+    }
+    return INITIAL_TEAM_MEMBERS[0].id;
+  });
+
+  const [submissionApprovals, setSubmissionApprovals] = useState<SubmissionApprovalRequest[]>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('zatax_approvals_v1');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+    return INITIAL_SUBMISSION_APPROVALS;
+  });
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('zatax_entities_v1', JSON.stringify(entities));
+      }
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [entities]);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('zatax_active_entity_id_v1', activeEntityId);
+      }
+    } catch {
+      // Ignore
+    }
+  }, [activeEntityId]);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('zatax_team_members_v1', JSON.stringify(teamMembers));
+      }
+    } catch {
+      // Ignore
+    }
+  }, [teamMembers]);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('zatax_active_user_id_v1', activeUserId);
+      }
+    } catch {
+      // Ignore
+    }
+  }, [activeUserId]);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('zatax_approvals_v1', JSON.stringify(submissionApprovals));
+      }
+    } catch {
+      // Ignore
+    }
+  }, [submissionApprovals]);
+
+  const activeUser = useMemo(
+    () => teamMembers.find(m => m.id === activeUserId) || teamMembers[0],
+    [teamMembers, activeUserId]
+  );
+
+  const [currentUserRole, setCurrentUserRole] = useState<RoleType>(() => activeUser?.role || 'Owner');
+
+  const activePermissions: RolePermissions = useMemo(
+    () => activeUser?.permissions || getDefaultPermissionsForRole(currentUserRole),
+    [activeUser, currentUserRole]
+  );
+
+  const accessibleEntities = useMemo(
+    () => entities.filter(e => e.status === 'Active' && hasEntityAccess(activeUser, e.id)),
+    [entities, activeUser]
+  );
+
+  const activeEntity = useMemo(
+    () =>
+      entities.find(e => e.id === activeEntityId && hasEntityAccess(activeUser, e.id)) ||
+      accessibleEntities[0] ||
+      entities[0],
+    [entities, activeEntityId, activeUser, accessibleEntities]
+  );
+
+  const profile = activeEntity.profile;
+  const transactions = activeEntity.transactions;
+  const invoices = activeEntity.invoices;
+  const bankAccounts = activeEntity.bankAccounts;
+  const pendingTransactions = activeEntity.pendingTransactions;
+  const categorizationRules = activeEntity.categorizationRules;
+  const trustLoans = activeEntity.trustLoans;
+
+  const updateActiveEntity = (updater: (ent: BusinessEntityWorkspace) => BusinessEntityWorkspace) => {
+    setEntities(prev => prev.map(ent => (ent.id === activeEntity.id ? updater(ent) : ent)));
+  };
+
+  const setProfile: React.Dispatch<React.SetStateAction<UserTaxProfile>> = (action) => {
+    updateActiveEntity(ent => ({
+      ...ent,
+      profile: typeof action === 'function' ? action(ent.profile) : action
+    }));
+  };
+
+  const setTransactions: React.Dispatch<React.SetStateAction<TaxTransaction[]>> = (action) => {
+    updateActiveEntity(ent => ({
+      ...ent,
+      transactions: typeof action === 'function' ? action(ent.transactions) : action
+    }));
+  };
+
+  const setInvoices: React.Dispatch<React.SetStateAction<InvoiceRecord[]>> = (action) => {
+    updateActiveEntity(ent => ({
+      ...ent,
+      invoices: typeof action === 'function' ? action(ent.invoices) : action
+    }));
+  };
+
+  const setPendingTransactions: React.Dispatch<React.SetStateAction<PendingBankTransaction[]>> = (action) => {
+    updateActiveEntity(ent => ({
+      ...ent,
+      pendingTransactions: typeof action === 'function' ? action(ent.pendingTransactions) : action
+    }));
+  };
+
+  const setCategorizationRules: React.Dispatch<React.SetStateAction<CategorizationRule[]>> = (action) => {
+    updateActiveEntity(ent => ({
+      ...ent,
+      categorizationRules: typeof action === 'function' ? action(ent.categorizationRules) : action
+    }));
+  };
+
+  const setTrustLoans: React.Dispatch<React.SetStateAction<TrustLoanAccount[]>> = (action) => {
+    updateActiveEntity(ent => ({
+      ...ent,
+      trustLoans: typeof action === 'function' ? action(ent.trustLoans) : action
+    }));
+  };
 
   const getInitialTab = (): NavTab => {
     if (typeof window !== 'undefined') {
@@ -204,67 +402,41 @@ export default function App() {
     standardPenaltyPct?: number;
   } | null>(null);
 
-  // 2. Financial Ledger State
-  const [transactions, setTransactions] = useState<TaxTransaction[]>(initialTransactions);
-  const [invoices, setInvoices] = useState<InvoiceRecord[]>(initialInvoices);
-  const [bankAccounts] = useState<BankAccount[]>(initialBankAccounts);
-  const [pendingTransactions, setPendingTransactions] = useState<PendingBankTransaction[]>(pendingMixedUseFeed);
-  const [categorizationRules, setCategorizationRules] = useState<CategorizationRule[]>(initialCategorizationRules);
-
-  // 3. Section 7C Trust Loans State
-  const [trustLoans, setTrustLoans] = useState<TrustLoanAccount[]>([
-    {
-      id: 'TL-2026-001',
-      lenderName: 'Ilitha Holdings (Lender)',
-      trustName: 'Ilitha Enterprise Employee Trust',
-      registrationNumber: 'IT-1842/2021',
-      principalAmount: 1800000,
-      interestRateCharged: 0,
-      outstandingBalance: 1650000,
-      officialRepoRate: 8.25,
-      officialRateOfInterest: 9.25,
-      annualDonationExemptionApplied: true,
-      dateIssued: '2022-03-01',
-      repaymentsAmountThisYear: 50000,
-      exclusionReason: 'None'
-    },
-    {
-      id: 'TL-2026-002',
-      lenderName: 'Ilitha Fintech Operations (Pty) Ltd',
-      trustName: 'Ilitha Technology Beneficiary Trust',
-      registrationNumber: 'IT-9014/2024',
-      principalAmount: 450000,
-      interestRateCharged: 9.5,
-      outstandingBalance: 420000,
-      officialRepoRate: 8.25,
-      officialRateOfInterest: 9.25,
-      annualDonationExemptionApplied: false,
-      dateIssued: '2024-05-15',
-      repaymentsAmountThisYear: 30000,
-      exclusionReason: 'Public Benefit Organisation'
+  // 2. Cryptographic Session & Access Control
+  const [session, setSession] = useState<AppSession>(() => {
+    const base = createDefaultSession(activeUser?.role || 'Owner');
+    if (activeUser) {
+      return {
+        ...base,
+        userId: activeUser.id,
+        userName: activeUser.name,
+        userEmail: activeUser.email,
+        role: activeUser.role,
+        scopes: getScopesFromPermissions(activeUser.permissions, activeUser.role)
+      };
     }
-  ]);
-
-  // 4. Cryptographic Session & Access Control
-  const [session, setSession] = useState<AppSession>(() => createDefaultSession('Owner'));
+    return base;
+  });
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
   const [isPopiaModalOpen, setIsPopiaModalOpen] = useState(false);
 
-  // 5. High-Fidelity Chronological Audit Log
+  // 3. High-Fidelity Chronological Audit Log
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([
     {
       id: 'LOG-INIT-001',
       timestamp: new Date().toISOString(),
-      userId: 'USR-OWNER-01',
+      userId: 'usr-owner-01',
       userName: 'V Zenzile',
       userEmail: 'vzenzile@ilithafintech.co.za',
       userRole: 'Owner',
+      entityId: 'ent-ilitha-fintech',
+      entityName: 'Ilitha Fintech Operations (Pty) Ltd',
       action: 'SYSTEM_BOOTSTRAP',
-      details: 'ZAtax Compliance Companion initialised. Directive8SafeRegister tracker active.'
+      details: 'ZAtax Multi-Entity Compliance Advisor initialised. Directive8SafeRegister tracker active.'
     }
   ]);
 
-  // 6. User Banner / Notification State
+  // 4. User Banner / Notification State
   const [banner, setBanner] = useState<{ message: string; visible: boolean }>({
     message: '',
     visible: false
@@ -289,6 +461,8 @@ export default function App() {
       userName: session.userName,
       userEmail: session.userEmail,
       userRole: currentUserRole,
+      entityId: activeEntity.id,
+      entityName: activeEntity.profile.name,
       action,
       details,
       ipAddress: session.ipAddress,
@@ -297,8 +471,52 @@ export default function App() {
     setAuditLogs(prev => [newEntry, ...prev.slice(0, 199)]);
   };
 
-  // Role switching with simulated session re-authorization
+  // Switch Active User Session (with per-user granular permissions & entity access validation)
+  const handleSwitchActiveUser = (userId: string) => {
+    const target = teamMembers.find(m => m.id === userId);
+    if (!target) return;
+    if (target.status === 'Suspended') {
+      showBanner(`⛔ Session blocked: User ${target.name} is currently suspended.`);
+      return;
+    }
+
+    setActiveUserId(target.id);
+    setCurrentUserRole(target.role);
+
+    const updatedSession: AppSession = {
+      ...session,
+      userId: target.id,
+      userName: target.name,
+      userEmail: target.email,
+      role: target.role,
+      scopes: getScopesFromPermissions(target.permissions, target.role),
+      token: generateTokenHex(32)
+    };
+    setSession(updatedSession);
+
+    // Ensure user lands on an entity they are authorized to access
+    if (!hasEntityAccess(target, activeEntity.id)) {
+      const firstAllowed = entities.find(e => e.status === 'Active' && hasEntityAccess(target, e.id));
+      if (firstAllowed) {
+        setActiveEntityId(firstAllowed.id);
+      }
+    }
+
+    addAuditLog(
+      'USER_SESSION_SWITCHED',
+      `Assumed active session as ${target.name} (${target.role}) with entity scope: ${(target.assignedEntityIds || ['ALL']).join(', ')}.`
+    );
+    showBanner(`👤 Active session: ${target.name} (${target.role})`);
+  };
+
+  // Role switching with simulated session re-authorization (syncs with matching team member if present)
   const handleRoleChange = (newRole: RoleType) => {
+    const matchingMember = teamMembers.find(m => m.role === newRole && m.status !== 'Suspended');
+    if (matchingMember) {
+      handleSwitchActiveUser(matchingMember.id);
+      return;
+    }
+
     setCurrentUserRole(newRole);
     const updatedSession: AppSession = {
       ...session,
@@ -311,12 +529,286 @@ export default function App() {
     showBanner(`🛡️ Switched active role to: ${newRole}`);
   };
 
-  // Permission Checker
+  // Switch Active Business Entity Workspace
+  const handleSelectEntity = (entityId: string) => {
+    const target = entities.find(e => e.id === entityId);
+    if (!target) return;
+    if (!hasEntityAccess(activeUser, entityId)) {
+      showBanner(`⛔ Access Denied: ${activeUser?.name || currentUserRole} is not assigned to ${target.profile.name}.`);
+      addAuditLog('ACCESS_DENIED_ENTITY_SWITCH', `Unauthorized entity switch attempt to ${target.profile.name}.`, 'warn');
+      return;
+    }
+    setActiveEntityId(target.id);
+    addAuditLog('ENTITY_WORKSPACE_SWITCHED', `Switched active tax workspace to ${target.profile.name} (${target.code}).`);
+    showBanner(`🏢 Switched workspace to ${target.profile.name}`);
+  };
+
+  // Multi-Entity Management Handlers
+  const handleCreateEntity = (newEntity: BusinessEntityWorkspace) => {
+    if (!checkPermission('canManageEntities')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot register new business entities.`);
+      return;
+    }
+    setEntities(prev => [...prev, newEntity]);
+    setActiveEntityId(newEntity.id);
+    addAuditLog('ENTITY_CREATED', `Registered business entity "${newEntity.profile.name}" (${newEntity.code}, Reg: ${newEntity.profile.registrationNumber}).`);
+    showBanner(`🏢 Registered & switched to "${newEntity.profile.name}"`);
+
+    fetch('/api/workspaces/entities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entity: newEntity,
+        userRole: currentUserRole,
+        canManageEntities: checkPermission('canManageEntities')
+      })
+    }).catch(() => {});
+  };
+
+  const handleUpdateEntityProfile = (
+    entityId: string,
+    updatedProfile: Partial<UserTaxProfile>,
+    meta?: { sector?: string; financialYearEnd?: string; code?: string }
+  ) => {
+    if (!checkPermission('canManageEntities')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot edit business entities.`);
+      return;
+    }
+    setEntities(prev =>
+      prev.map(ent =>
+        ent.id === entityId
+          ? {
+              ...ent,
+              code: meta?.code || ent.code,
+              sector: meta?.sector || ent.sector,
+              financialYearEnd: meta?.financialYearEnd || ent.financialYearEnd,
+              profile: { ...ent.profile, ...updatedProfile }
+            }
+          : ent
+      )
+    );
+    addAuditLog('ENTITY_UPDATED', `Updated statutory profile for entity ID ${entityId}.`);
+    showBanner('✅ Business entity details updated.');
+  };
+
+  const handleToggleArchiveEntity = (entityId: string) => {
+    if (!checkPermission('canManageEntities')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot archive business entities.`);
+      return;
+    }
+    const target = entities.find(e => e.id === entityId);
+    if (!target) return;
+    const activeCount = entities.filter(e => e.status === 'Active').length;
+    if (target.status === 'Active' && activeCount <= 1) {
+      showBanner('⚠️ At least one active business entity workspace is required.');
+      return;
+    }
+    const nextStatus = target.status === 'Active' ? 'Archived' : 'Active';
+    setEntities(prev => prev.map(e => (e.id === entityId ? { ...e, status: nextStatus } : e)));
+    if (nextStatus === 'Archived' && activeEntityId === entityId) {
+      const fallback = entities.find(e => e.id !== entityId && e.status === 'Active');
+      if (fallback) setActiveEntityId(fallback.id);
+    }
+    addAuditLog('ENTITY_STATUS_CHANGED', `${target.profile.name} set to ${nextStatus}.`);
+    showBanner(`🏢 ${target.profile.name} marked as ${nextStatus}.`);
+  };
+
+  // Multi-User & Permission Management Handlers
+  const handleInviteMember = (member: TeamMember) => {
+    if (!checkPermission('canManageTeam')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot invite team members.`);
+      return;
+    }
+    setTeamMembers(prev => [member, ...prev]);
+    addAuditLog(
+      'TEAM_MEMBER_INVITED',
+      `Added user ${member.name} (${member.role}) assigned to entities: ${(member.assignedEntityIds || ['ALL']).join(', ')}.`
+    );
+    showBanner(`✅ Added ${member.name} (${member.role}) to workspace directory.`);
+
+    fetch('/api/workspaces/members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        member,
+        userRole: currentUserRole,
+        canManageTeam: checkPermission('canManageTeam')
+      })
+    }).catch(() => {});
+  };
+
+  const handleUpdateMember = (memberId: string, updates: Partial<TeamMember>) => {
+    if (!checkPermission('canManageTeam')) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot modify user permissions.`);
+      return;
+    }
+    setTeamMembers(prev =>
+      prev.map(m => (m.id === memberId ? { ...m, ...updates } : m))
+    );
+    if (memberId === activeUserId && updates.permissions && updates.role) {
+      setCurrentUserRole(updates.role);
+      setSession(prev => ({
+        ...prev,
+        role: updates.role!,
+        scopes: getScopesFromPermissions(updates.permissions!, updates.role!)
+      }));
+    }
+    addAuditLog('TEAM_MEMBER_UPDATED', `Updated access permissions / status for user ID ${memberId}.`);
+    showBanner('✅ User permissions updated.');
+  };
+
+  // Submission Approval Queue Handlers
+  const handleCreateSubmissionRequest = (
+    req: Omit<SubmissionApprovalRequest, 'id' | 'preparedAt' | 'status'>
+  ) => {
+    const newReq: SubmissionApprovalRequest = {
+      ...req,
+      id: `SUB-${Date.now()}`,
+      preparedAt: new Date().toISOString(),
+      status: 'PENDING_APPROVAL'
+    };
+    setSubmissionApprovals(prev => [newReq, ...prev]);
+    addAuditLog(
+      'SUBMISSION_DRAFT_QUEUED',
+      `Queued ${newReq.submissionType} (${newReq.period}) for ${newReq.entityName} awaiting Submission Approval.`
+    );
+    showBanner(`⏳ Submitted ${newReq.submissionType} for ${newReq.entityName} into approval queue.`);
+
+    fetch('/api/workspaces/approvals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        request: newReq,
+        userRole: currentUserRole,
+        canEditTransactions: checkPermission('canEditTransactions')
+      })
+    }).catch(() => {});
+  };
+
+  const handleReviewSubmissionRequest = (
+    requestId: string,
+    decision: 'APPROVED_FOR_FILING' | 'REJECTED',
+    notes: string
+  ) => {
+    if (!checkPermission('canApproveSubmissions')) {
+      showBanner(`⛔ Access Denied: "${currentUserRole}" lacks Submission Approval authorization.`);
+      addAuditLog('ACCESS_DENIED_SUBMISSION_APPROVAL', `Unauthorized attempt to ${decision} request ${requestId}.`, 'warn');
+      return;
+    }
+    const now = new Date().toISOString();
+    const sarsRefNumber = decision === 'APPROVED_FOR_FILING' ? generateSubmissionRef('SARS-APR') : undefined;
+    setSubmissionApprovals(prev =>
+      prev.map(item =>
+        item.id === requestId
+          ? {
+              ...item,
+              status: decision,
+              reviewedByName: session.userName,
+              reviewedByRole: currentUserRole,
+              reviewedAt: now,
+              reviewNotes: notes || item.reviewNotes,
+              sarsRefNumber: sarsRefNumber || item.sarsRefNumber
+            }
+          : item
+      )
+    );
+    addAuditLog(
+      decision === 'APPROVED_FOR_FILING' ? 'SUBMISSION_APPROVED' : 'SUBMISSION_REJECTED',
+      `Submission ${requestId} marked as ${decision} by ${session.userName}. ${notes ? `Notes: ${notes}` : ''}`,
+      decision === 'REJECTED' ? 'warn' : 'info'
+    );
+    showBanner(
+      decision === 'APPROVED_FOR_FILING'
+        ? '✅ Filing approved for SARS transmission.'
+        : '↩️ Submission returned to preparer for revision.'
+    );
+
+    fetch(`/api/workspaces/approvals/${requestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        decision,
+        notes,
+        userRole: currentUserRole,
+        canApproveSubmissions: checkPermission('canApproveSubmissions'),
+        reviewerName: session.userName
+      })
+    }).catch(() => {});
+  };
+
+  const handleVatSubmitForApproval = (details: { taxPeriod: string; netAmount: number }) => {
+    handleCreateSubmissionRequest({
+      entityId: activeEntity.id,
+      entityName: activeEntity.profile.name,
+      submissionType: 'VAT201_RETURN',
+      period: details.taxPeriod,
+      title: `VAT201 Declaration (${details.taxPeriod})`,
+      amountImpactZAR: details.netAmount,
+      preparedByUserId: activeUser?.id || session.userId,
+      preparedByName: session.userName,
+      preparedByRole: currentUserRole,
+      reviewNotes: 'VAT201 draft prepared via Calculator and routed for Submission Approval.'
+    });
+    handleTabChange('multi_entity_access');
+  };
+
+  const handleEmp501SubmitForApproval = (details: { period: string; title: string; netLiability: number }) => {
+    handleCreateSubmissionRequest({
+      entityId: activeEntity.id,
+      entityName: activeEntity.profile.name,
+      submissionType: 'EMP501_RECON',
+      period: details.period,
+      title: details.title,
+      amountImpactZAR: details.netLiability,
+      preparedByUserId: activeUser?.id || session.userId,
+      preparedByName: session.userName,
+      preparedByRole: currentUserRole,
+      reviewNotes: 'EMP501 interim reconciliation balanced and routed for Submission Approval.'
+    });
+    handleTabChange('multi_entity_access');
+  };
+
+  const handleAdr1SubmitForApproval = (details: { noticeNo: string; sourceCode: string; amount: number }) => {
+    handleCreateSubmissionRequest({
+      entityId: activeEntity.id,
+      entityName: activeEntity.profile.name,
+      submissionType: 'ADR1_OBJECTION',
+      period: '2026 Tax Assessment',
+      title: `Rule 7 ADR1 Objection (#${details.noticeNo} · Code ${details.sourceCode})`,
+      amountImpactZAR: details.amount,
+      preparedByUserId: activeUser?.id || session.userId,
+      preparedByName: session.userName,
+      preparedByRole: currentUserRole,
+      reviewNotes: 'Vault evidence corroborated; queued for Tax Practitioner / Owner sign-off.'
+    });
+    handleTabChange('multi_entity_access');
+  };
+
+  const handleVdpSubmitForApproval = (details: { title: string; period: string; shortfall: number }) => {
+    handleCreateSubmissionRequest({
+      entityId: activeEntity.id,
+      entityName: activeEntity.profile.name,
+      submissionType: 'VDP_DISCLOSURE',
+      period: details.period,
+      title: details.title,
+      amountImpactZAR: details.shortfall,
+      preparedByUserId: activeUser?.id || session.userId,
+      preparedByName: session.userName,
+      preparedByRole: currentUserRole,
+      reviewNotes: 'VDP01 voluntary disclosure dossier prepared and routed for Submission Approval.'
+    });
+    handleTabChange('multi_entity_access');
+  };
+
+  // Permission Checker (supports granular per-user RolePermissions overrides)
   const checkPermission = (actionOrRole: string | RoleType, actionKey?: string): boolean => {
     if (actionKey) {
+      if (actionOrRole === currentUserRole) {
+        return isRoleAuthorized(currentUserRole, actionKey, activePermissions);
+      }
       return isRoleAuthorized(actionOrRole as RoleType, actionKey);
     }
-    return isRoleAuthorized(currentUserRole, actionOrRole as string);
+    return isRoleAuthorized(currentUserRole, actionOrRole as string, activePermissions);
   };
 
   // Live Tax Calculation Snapshot
@@ -326,7 +818,7 @@ export default function App() {
 
   // Entity Profile composite for sub-components
   const entityProfile: EntityProfile = useMemo(() => ({
-    id: 'ENT-ZA-001',
+    id: activeEntity.id,
     profile,
     transactions,
     invoices,
@@ -335,7 +827,12 @@ export default function App() {
     auditLogs,
     simulatedCurrentUserRole: currentUserRole,
     grossIncome: liveSnapshot.grossIncome
-  }), [profile, transactions, invoices, bankAccounts, pendingTransactions, auditLogs, currentUserRole, liveSnapshot]);
+  }), [activeEntity.id, profile, transactions, invoices, bankAccounts, pendingTransactions, auditLogs, currentUserRole, liveSnapshot]);
+
+  const pendingApprovalsCount = useMemo(
+    () => submissionApprovals.filter(a => a.status === 'PENDING_APPROVAL').length,
+    [submissionApprovals]
+  );
 
   // Handle invoice approval from OCR (RBAC Guarded: Owner and Accountant only)
   const handleApproveInvoice = (inv: Partial<InvoiceRecord> & Record<string, any>) => {
@@ -533,23 +1030,42 @@ export default function App() {
             </div>
           </div>
 
-          {/* Quick Metrics & Session Status */}
-          <div className="flex flex-wrap items-center gap-3">
+          {/* Quick Metrics, Entity Switcher & Session Status */}
+          <div className="flex flex-wrap items-center gap-2.5">
             
+            {/* Active Business Entity Workspace Selector */}
+            <div className="flex items-center gap-1.5 bg-slate-900/90 border border-white/10 rounded-xl px-2.5 py-1.5">
+              <Building2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <select
+                value={activeEntity.id}
+                onChange={(e) => handleSelectEntity(e.target.value)}
+                className="bg-transparent text-white text-xs font-semibold focus:outline-none cursor-pointer max-w-[190px] truncate"
+                id="entity-selector-dropdown"
+                title="Switch active South African business entity workspace"
+              >
+                {accessibleEntities.map(ent => (
+                  <option key={ent.id} value={ent.id} className="bg-slate-900 text-white">
+                    {ent.code} · {ent.profile.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Live Provisional Tax Status */}
             <div className="bg-slate-900/80 border border-white/10 rounded-xl px-3 py-1.5 flex items-center gap-2">
               <div className="text-right">
                 <div className="text-[10px] text-slate-400 uppercase font-semibold">Net SARS Position</div>
-                <div className={`text-xs font-bold font-mono ${liveSnapshot.netTaxLiabilityOrRefund > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                <div className={`text-xs font-bold font-mono tabular-nums ${liveSnapshot.netTaxLiabilityOrRefund > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
                   {formatZAR(liveSnapshot.netTaxLiabilityOrRefund)}
                 </div>
               </div>
             </div>
 
-            {/* Role Switcher Pill */}
-            <div className="flex items-center gap-1.5 bg-slate-900/90 border border-white/10 rounded-xl p-1">
-              <UserCheck className="w-3.5 h-3.5 text-cyan-400 ml-1.5" />
-              <span className="text-[10px] text-slate-400 font-medium">Role:</span>
+            {/* Active User & Role Switcher */}
+            <div className="flex items-center gap-1.5 bg-slate-900/90 border border-white/10 rounded-xl px-2 py-1.5">
+              <UserCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="text-[11px] text-slate-300 font-medium hidden md:inline">{activeUser?.name}</span>
+              <span className="text-slate-600 hidden md:inline">·</span>
               <select
                 value={currentUserRole}
                 onChange={(e) => handleRoleChange(e.target.value as RoleType)}
@@ -560,21 +1076,22 @@ export default function App() {
                 <option value="Accountant" className="bg-slate-900 text-white">Accountant</option>
                 <option value="Bookkeeper" className="bg-slate-900 text-white">Bookkeeper</option>
                 <option value="Auditor" className="bg-slate-900 text-white">Auditor</option>
+                <option value="Custom" className="bg-slate-900 text-white">Custom</option>
               </select>
             </div>
 
-            {/* Export Ledger CSV Pill (RBAC Guarded) */}
+            {/* Export Ledger CSV (RBAC Guarded) */}
             <button
               onClick={handleDownloadLedgerCSV}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-medium transition cursor-pointer"
-              title="Download full general ledger CSV (Requires Owner, Accountant, or Auditor role)"
+              title="Download full general ledger CSV (Requires Owner, Accountant, or Auditor export scope)"
               id="export-ledger-csv-btn"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
               <span>Export CSV</span>
             </button>
 
-            {/* POPIA Section 18/19 Statutory Governance Pill */}
+            {/* POPIA Section 18/19 Statutory Governance */}
             <button
               onClick={() => setIsPopiaModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-medium transition cursor-pointer"
@@ -585,7 +1102,7 @@ export default function App() {
               <span>POPIA §18/19</span>
             </button>
 
-            {/* Session Security Token Pill */}
+            {/* Session Security Token */}
             <button
               onClick={() => setIsSessionModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-mono font-medium transition cursor-pointer"
@@ -595,6 +1112,15 @@ export default function App() {
               <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
               <span>{session.token.substring(0, 6)}...</span>
             </button>
+
+            {/* Persistent Upcoming Tax Deadlines Alert Bell */}
+            <TaxDeadlineAlertBell
+              activeEntity={activeEntity}
+              pendingApprovalsCount={pendingApprovalsCount}
+              onNavigateTab={(tab) => handleTabChange(tab)}
+              showBanner={showBanner}
+              addAuditLog={addAuditLog}
+            />
 
           </div>
 
@@ -636,6 +1162,22 @@ export default function App() {
           >
             <TrendingUp className="w-3.5 h-3.5" />
             <span>Cockpit</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('multi_entity_access')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'multi_entity_access'
+                ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-sm font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+            id="nav-multi-entity-access-btn"
+          >
+            <Building2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>Entities & Access</span>
+            {pendingApprovalsCount > 0 && (
+              <span className="text-[10px] font-mono tabular-nums text-amber-300">({pendingApprovalsCount})</span>
+            )}
           </button>
 
           <button
@@ -1085,6 +1627,14 @@ export default function App() {
             {/* Quick Action Buttons for Compliance Ledger */}
             <div className="flex flex-wrap gap-2 pt-1">
               <button
+                onClick={() => handleTabChange('multi_entity_access')}
+                className="px-3.5 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-400/40 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                id="overview-multi-entity-btn"
+              >
+                <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                <span>Entities & Team Access ({accessibleEntities.length} Entities · {pendingApprovalsCount} Pending Approvals)</span>
+              </button>
+              <button
                 onClick={() => setActiveTab('ai_assistant')}
                 className="px-3.5 py-2 bg-gradient-to-r from-cyan-600/30 via-indigo-600/30 to-purple-600/30 hover:from-cyan-600/40 hover:to-indigo-600/40 text-cyan-200 border border-cyan-500/40 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
               >
@@ -1178,11 +1728,14 @@ export default function App() {
 
             {/* Embedded High-Value Assessment Decoder on Overview */}
             <Ita34AssessmentDecoder
+              key={`overview-${activeEntity.id}`}
               profile={entityProfile}
               formatZAR={formatZAR}
               addAuditLog={addAuditLog}
               showBanner={showBanner}
+              checkPermission={checkPermission}
               onNavigateToTaxPro={() => setActiveTab('tax_pro_connect')}
+              onSubmitForApproval={handleAdr1SubmitForApproval}
             />
 
             {/* Audit Trail Drawer Preview */}
@@ -1223,6 +1776,7 @@ export default function App() {
         {activeTab === 'ai_assistant' && (
           <div className="space-y-6 animate-fadeIn">
             <SarsAiTaxAssistant
+              key={activeEntity.id}
               profile={profile}
               currentUserRole={currentUserRole}
               showBanner={showBanner}
@@ -1239,12 +1793,14 @@ export default function App() {
         {activeTab === 'emp501_reconciliation' && (
           <div className="space-y-6 animate-fadeIn">
             <Emp501InterimReconciliation
+              key={activeEntity.id}
               profile={profile}
               currentUserRole={currentUserRole}
               checkPermission={checkPermission}
               addAuditLog={addAuditLog}
               showBanner={showBanner}
               onNavigateToTaxPro={() => setActiveTab('tax_pro_connect')}
+              onSubmitForApproval={handleEmp501SubmitForApproval}
             />
           </div>
         )}
@@ -1252,6 +1808,7 @@ export default function App() {
         {/* AUTOMATED INTEGRATED SYSTEM ENGINE (AUTOPILOT - ZERO OVERLAPS & ZERO REPETITIONS) */}
         {activeTab === 'integrated_system' && (
           <AutomatedIntegratedSystemHub
+            key={activeEntity.id}
             transactions={transactions}
             setTransactions={setTransactions}
             profile={profile}
@@ -1268,6 +1825,7 @@ export default function App() {
         {/* AI-POWERED SARS TAX DEDUCTIONS & CREDITS DISCOVERY ENGINE */}
         {activeTab === 'ai_deductions' && (
           <AiTaxDeductionsAdvisor
+            key={activeEntity.id}
             transactions={transactions}
             setTransactions={setTransactions}
             profile={profile}
@@ -1281,12 +1839,14 @@ export default function App() {
         {/* VAT201 RETURN CALCULATOR & ELECTRONIC LODGEMENT CENTER */}
         {activeTab === 'vat201_lodgement' && (
           <VatFilingCenter
+            key={activeEntity.id}
             profile={profile}
             setProfile={setProfile}
             currentUserRole={currentUserRole}
             checkPermission={checkPermission}
             addAuditLog={addAuditLog}
             showBanner={showBanner}
+            onSubmitForApproval={handleVatSubmitForApproval}
           />
         )}
 
@@ -1328,6 +1888,7 @@ export default function App() {
         {/* SARS AUTO-ASSESSMENT RECONCILIATION CENTER */}
         {activeTab === 'auto_assessment' && (
           <SarsAutoAssessmentPanel
+            key={activeEntity.id}
             profile={profile}
             currentUserRole={currentUserRole}
             checkPermission={checkPermission}
@@ -1347,6 +1908,7 @@ export default function App() {
         {activeTab === 'statutory_enhancements' && (
           <div className="space-y-6 animate-fadeIn">
             <StatutoryEnhancementsHub
+              key={activeEntity.id}
               profile={profile}
               setProfile={setProfile}
               currentUserRole={currentUserRole}
@@ -1367,12 +1929,14 @@ export default function App() {
         {/* SARS VOLUNTARY DISCLOSURE PROGRAMME (VDP) & PROACTIVE OVERSIGHT RELIEF (TAA §§225-233) */}
         {activeTab === 'vdp_disclosure' && (
           <SarsVdpCenter
+            key={activeEntity.id}
             profile={profile}
             currentUserRole={currentUserRole}
             checkPermission={checkPermission}
             addAuditLog={addAuditLog}
             showBanner={showBanner}
             onNavigateToShield={() => setActiveTab('pre_audit_shield')}
+            onSubmitForApproval={handleVdpSubmitForApproval}
             initialOversight={vdpPrefillData}
           />
         )}
@@ -1381,11 +1945,14 @@ export default function App() {
         {activeTab === 'ita34_decoder' && (
           <div className="space-y-6 animate-fadeIn">
             <Ita34AssessmentDecoder
+              key={activeEntity.id}
               profile={entityProfile}
               formatZAR={formatZAR}
               addAuditLog={addAuditLog}
               showBanner={showBanner}
+              checkPermission={checkPermission}
               onNavigateToTaxPro={() => setActiveTab('tax_pro_connect')}
+              onSubmitForApproval={handleAdr1SubmitForApproval}
             />
           </div>
         )}
@@ -1394,6 +1961,7 @@ export default function App() {
         {activeTab === 'logbook' && (
           <div className="space-y-6 animate-fadeIn">
             <TravelLogbookCalculator
+              key={activeEntity.id}
               formatZAR={formatZAR}
               addAuditLog={addAuditLog}
               showBanner={showBanner}
@@ -1410,12 +1978,14 @@ export default function App() {
         {activeTab === 'vat_invoices' && (
           <div className="space-y-6 animate-fadeIn">
             <VatFilingCenter
+              key={activeEntity.id}
               profile={profile}
               setProfile={setProfile}
               currentUserRole={currentUserRole}
               checkPermission={checkPermission}
               addAuditLog={addAuditLog}
               showBanner={showBanner}
+              onSubmitForApproval={handleVatSubmitForApproval}
             />
           </div>
         )}
@@ -1424,6 +1994,7 @@ export default function App() {
         {activeTab === 'trust_loans' && (
           <div className="space-y-6 animate-fadeIn">
             <TrustLoansCompliance
+              key={activeEntity.id}
               trustLoans={trustLoans}
               setTrustLoans={setTrustLoans}
               userRole={currentUserRole}
@@ -1439,6 +2010,7 @@ export default function App() {
         {activeTab === 'sbc_wizard' && (
           <div className="bg-[#0D1527] border border-white/10 rounded-3xl p-6 space-y-6 animate-fadeIn">
             <SbcAdvisoryWizard
+              key={activeEntity.id}
               profile={entityProfile}
               formatZAR={formatZAR}
               addAuditLog={addAuditLog}
@@ -1451,6 +2023,7 @@ export default function App() {
         {activeTab === 'eti_calculator' && (
           <div className="space-y-6 animate-fadeIn">
             <EtiCalculatorPanel
+              key={activeEntity.id}
               formatZAR={formatZAR}
               addAuditLog={addAuditLog}
               showBanner={showBanner}
@@ -1465,6 +2038,7 @@ export default function App() {
         {activeTab === 'two_pot' && (
           <div className="bg-[#0D1527] border border-white/10 rounded-3xl p-6 space-y-6 animate-fadeIn">
             <TwoPotRetirementSimulator
+              key={activeEntity.id}
               profile={entityProfile}
               formatZAR={formatZAR}
               addAuditLog={addAuditLog}
@@ -1477,6 +2051,7 @@ export default function App() {
         {activeTab === 'pbo_section18a' && (
           <div className="space-y-6 animate-fadeIn">
             <PboDonationsSection18A
+              key={activeEntity.id}
               taxableIncome={liveSnapshot.netTaxableIncome}
               formatZAR={formatZAR}
               addAuditLog={addAuditLog}
@@ -1492,6 +2067,7 @@ export default function App() {
         {activeTab === 'afs_drafter' && (
           <div className="bg-[#0D1527] border border-white/10 rounded-3xl p-6 space-y-6 animate-fadeIn">
             <AfsStatementsDrafter
+              key={activeEntity.id}
               profile={profile}
               liveSnapshot={liveSnapshot}
               formatZAR={formatZAR}
@@ -1629,13 +2205,42 @@ export default function App() {
         {activeTab === 'tax_pro_connect' && (
           <div className="space-y-6 animate-fadeIn">
             <TaxProfessionalConnect
+              key={activeEntity.id}
               profile={profile}
               transactions={transactions}
               invoices={invoices}
               currentUserRole={currentUserRole}
+              checkPermission={checkPermission}
               addAuditLog={addAuditLog}
               showBanner={showBanner}
               formatZAR={formatZAR}
+            />
+          </div>
+        )}
+
+        {/* 19. MULTI-ENTITY WORKSPACE & GRANULAR RBAC ACCESS HUB */}
+        {activeTab === 'multi_entity_access' && (
+          <div className="space-y-6 animate-fadeIn">
+            <MultiEntityAccessHub
+              entities={entities}
+              activeEntityId={activeEntity.id}
+              onSelectEntity={handleSelectEntity}
+              onCreateEntity={handleCreateEntity}
+              onUpdateEntityProfile={handleUpdateEntityProfile}
+              onToggleArchiveEntity={handleToggleArchiveEntity}
+              teamMembers={teamMembers}
+              activeUserId={activeUser?.id || teamMembers[0].id}
+              onSwitchActiveUser={handleSwitchActiveUser}
+              onInviteMember={handleInviteMember}
+              onUpdateMember={handleUpdateMember}
+              submissionApprovals={submissionApprovals}
+              onCreateSubmissionRequest={handleCreateSubmissionRequest}
+              onReviewSubmissionRequest={handleReviewSubmissionRequest}
+              auditLogs={auditLogs}
+              currentUserRole={currentUserRole}
+              activePermissions={activePermissions}
+              addAuditLog={addAuditLog}
+              showBanner={showBanner}
             />
           </div>
         )}
@@ -1685,6 +2290,7 @@ export default function App() {
         onClose={() => setIsPopiaModalOpen(false)}
         profile={profile}
         currentUserRole={currentUserRole}
+        checkPermission={checkPermission}
         showBanner={showBanner}
         addAuditLog={addAuditLog}
       />

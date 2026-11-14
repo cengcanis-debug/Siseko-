@@ -197,11 +197,12 @@ export const AutomatedIntegratedSystemHub: React.FC<AutomatedIntegratedSystemHub
       status: 'COMPLIANT',
       statute: 'Governance Framework & POPIA Act 4/2013',
       findings: [
-        `Active Role: "${currentUserRole}" with simulated permission enforcement enabled.`,
-        `Permission canEditTransactions: ${isRoleAuthorized(currentUserRole, 'canEditTransactions') ? 'AUTHORIZED' : 'RESTRICTED'}.`,
-        `Permission canDeleteTransactions: ${isRoleAuthorized(currentUserRole, 'canDeleteTransactions') ? 'AUTHORIZED' : 'RESTRICTED'}.`,
-        `Permission canApproveInvoices: ${isRoleAuthorized(currentUserRole, 'canApproveInvoices') ? 'AUTHORIZED' : 'RESTRICTED'}.`,
-        `Permission canDownloadLedger: ${isRoleAuthorized(currentUserRole, 'canDownloadLedger') ? 'AUTHORIZED' : 'RESTRICTED'}.`,
+        `Active Role: "${currentUserRole}" with granular permission enforcement enabled.`,
+        `Permission canEditTransactions: ${checkPermission('canEditTransactions') ? 'AUTHORIZED' : 'RESTRICTED'}.`,
+        `Permission canDeleteTransactions: ${checkPermission('canDeleteTransactions') ? 'AUTHORIZED' : 'RESTRICTED'}.`,
+        `Permission canApproveInvoices: ${checkPermission('canApproveInvoices') ? 'AUTHORIZED' : 'RESTRICTED'}.`,
+        `Permission canApproveSubmissions: ${checkPermission('canApproveSubmissions') ? 'AUTHORIZED' : 'RESTRICTED'}.`,
+        `Permission canDownloadLedger: ${checkPermission('canDownloadLedger') ? 'AUTHORIZED' : 'RESTRICTED'}.`,
         'High-fidelity chronological audit trail maintained in immutable session storage.'
       ],
       metrics: {
@@ -813,26 +814,26 @@ export const AutomatedIntegratedSystemHub: React.FC<AutomatedIntegratedSystemHub
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
                 <div className="p-2 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-between">
                   <span className="text-slate-400">Edit Ledger:</span>
-                  <span className={`font-mono font-bold ${isRoleAuthorized(currentUserRole, 'canEditTransactions') ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {isRoleAuthorized(currentUserRole, 'canEditTransactions') ? 'ALLOW' : 'DENY'}
+                  <span className={`font-mono font-bold ${checkPermission('canEditTransactions') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {checkPermission('canEditTransactions') ? 'ALLOW' : 'DENY'}
                   </span>
                 </div>
                 <div className="p-2 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-between">
                   <span className="text-slate-400">Delete Ledger:</span>
-                  <span className={`font-mono font-bold ${isRoleAuthorized(currentUserRole, 'canDeleteTransactions') ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {isRoleAuthorized(currentUserRole, 'canDeleteTransactions') ? 'ALLOW' : 'DENY'}
+                  <span className={`font-mono font-bold ${checkPermission('canDeleteTransactions') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {checkPermission('canDeleteTransactions') ? 'ALLOW' : 'DENY'}
                   </span>
                 </div>
                 <div className="p-2 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-between">
                   <span className="text-slate-400">Approve Invoices:</span>
-                  <span className={`font-mono font-bold ${isRoleAuthorized(currentUserRole, 'canApproveInvoices') ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {isRoleAuthorized(currentUserRole, 'canApproveInvoices') ? 'ALLOW' : 'DENY'}
+                  <span className={`font-mono font-bold ${checkPermission('canApproveInvoices') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {checkPermission('canApproveInvoices') ? 'ALLOW' : 'DENY'}
                   </span>
                 </div>
                 <div className="p-2 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-between">
                   <span className="text-slate-400">Export Ledger:</span>
-                  <span className={`font-mono font-bold ${isRoleAuthorized(currentUserRole, 'canDownloadLedger') ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {isRoleAuthorized(currentUserRole, 'canDownloadLedger') ? 'ALLOW' : 'DENY'}
+                  <span className={`font-mono font-bold ${checkPermission('canDownloadLedger') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {checkPermission('canDownloadLedger') ? 'ALLOW' : 'DENY'}
                   </span>
                 </div>
               </div>

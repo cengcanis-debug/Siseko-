@@ -217,23 +217,30 @@ export interface TaxCycleSnapshot {
 export type RoleType = 'Owner' | 'Accountant' | 'Bookkeeper' | 'Auditor' | 'Custom';
 
 export interface RolePermissions {
-  canEditTransactions: boolean;
-  canScanInvoices: boolean;
-  canViewTaxProjections: boolean;
-  canManageTeam: boolean;
-  canManageDisputes: boolean;
+  canEditTransactions: boolean; // Data Entry (Add/Classify transactions & logbook)
+  canDeleteTransactions?: boolean; // Delete / Void ledger items
+  canScanInvoices: boolean; // Capture / Scan OCR tax invoices
+  canApproveInvoices?: boolean; // Approve scanned invoices into VAT201
+  canViewTaxProjections: boolean; // View-Only access to tax calculations & reports
+  canApproveSubmissions?: boolean; // Submission Approval (VAT201, EMP501, ADR1, VDP)
+  canManageTeam: boolean; // Invite users, assign roles & entity permissions
+  canManageEntities?: boolean; // Create / edit / archive distinct business entities
+  canManageDisputes: boolean; // Draft & file Rule 7 ADR1 disputes
   canManageSuccession: boolean;
-  canDownloadCSV: boolean;
+  canDownloadCSV: boolean; // Export SARS CSV ledgers & schedules
 }
 
 export interface TeamMember {
   id: string;
   name: string;
   email: string;
+  title?: string;
   role: RoleType;
   permissions: RolePermissions;
-  status: 'Active' | 'Pending Invite';
+  assignedEntityIds?: string[]; // ['ALL'] or specific entity IDs this user can access
+  status: 'Active' | 'Pending Invite' | 'Suspended';
   joinedAt?: string;
+  lastActiveAt?: string;
 }
 
 export interface AppSession {
@@ -257,6 +264,8 @@ export interface AuditLogEntry {
   userName: string;
   userEmail: string;
   userRole: RoleType;
+  entityId?: string;
+  entityName?: string;
   action: string;
   details: string;
   ipAddress?: string;
@@ -779,3 +788,45 @@ export interface TaxTopicPrompt {
   prompt: string;
   statutoryRef: string;
 }
+
+// =========================================================================
+// MULTI-ENTITY WORKSPACE & SUBMISSION APPROVAL WORKFLOW
+// =========================================================================
+export interface BusinessEntityWorkspace {
+  id: string;
+  code: string; // Short code e.g. 'ILITHA', 'KALAHARI', 'TABLEBAY'
+  sector: string;
+  financialYearEnd: string;
+  status: 'Active' | 'Archived';
+  createdAt: string;
+  profile: UserTaxProfile;
+  transactions: TaxTransaction[];
+  invoices: InvoiceRecord[];
+  bankAccounts: BankAccount[];
+  pendingTransactions: PendingBankTransaction[];
+  categorizationRules: CategorizationRule[];
+  trustLoans: TrustLoanAccount[];
+}
+
+export type SubmissionType = 'VAT201_RETURN' | 'EMP501_RECON' | 'ADR1_OBJECTION' | 'VDP_DISCLOSURE' | 'ITR14_RETURN';
+
+export interface SubmissionApprovalRequest {
+  id: string;
+  entityId: string;
+  entityName: string;
+  submissionType: SubmissionType;
+  period: string;
+  title: string;
+  amountImpactZAR: number;
+  preparedByUserId: string;
+  preparedByName: string;
+  preparedByRole: RoleType;
+  preparedAt: string;
+  status: 'PENDING_APPROVAL' | 'APPROVED_FOR_FILING' | 'REJECTED';
+  reviewedByName?: string;
+  reviewedByRole?: RoleType;
+  reviewedAt?: string;
+  reviewNotes?: string;
+  sarsRefNumber?: string;
+}
+

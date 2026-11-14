@@ -87,7 +87,7 @@ export const VatOcrScannerPanel: React.FC<VatOcrScannerPanelProps> = ({
   };
 
   const handlePostToLedger = () => {
-    if (!checkPermission(currentUserRole, 'approve_invoices')) {
+    if (!checkPermission(currentUserRole, 'canApproveInvoices')) {
       showBanner(`⛔ Access Denied: ${currentUserRole} does not have authority to post invoices to general ledger.`);
       return;
     }

@@ -3285,10 +3285,14 @@ app.post('/api/vat/calculate-and-lodge', authRateLimiter, express.json(), async 
     ];
 
     if (action === 'lodge') {
-      if (userRole !== 'Owner' && userRole !== 'Accountant' && userRole !== 'Auditor') {
+      const canApproveSubmission =
+        userRole === 'Owner' ||
+        userRole === 'Accountant' ||
+        (userRole === 'Custom' && Boolean(req.body?.canApproveSubmissions));
+      if (!canApproveSubmission) {
         return res.status(403).json({
           success: false,
-          error: `Access Denied: Role "${userRole}" is not authorized to lodge statutory VAT201 declarations. Requires Owner, Accountant, or Auditor.`
+          error: `Access Denied: Role "${userRole}" lacks Submission Approval permission to lodge statutory VAT201 declarations.`
         });
       }
 
@@ -3898,13 +3902,14 @@ app.post('/api/v1/tax-pro/kill-switch', (req, res) => {
 // ==========================================
 app.post('/api/v1/emp501/submit', (req, res) => {
   try {
-    const { role, declaration, monthlyRecords, certificates } = req.body;
+    const { role, canApproveSubmissions = false, declaration, monthlyRecords, certificates } = req.body;
 
-    // Multi-Role Access Control Check (RULE 1)
-    if (role !== 'Owner' && role !== 'Accountant') {
+    // Multi-Role & Granular Permission Access Control Check
+    const isAuthorized = role === 'Owner' || role === 'Accountant' || (role === 'Custom' && Boolean(canApproveSubmissions));
+    if (!isAuthorized) {
       return res.status(403).json({
         success: false,
-        error: `Access Denied: Role '${role}' is not authorized to submit EMP501 returns. Required: Owner or Accountant.`
+        error: `Access Denied: Role '${role}' lacks Submission Approval authority to submit EMP501 returns.`
       });
     }
 
@@ -3971,6 +3976,116 @@ app.post('/api/v1/emp501/submit', (req, res) => {
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// ==============================================================================
+// MULTI-ENTITY WORKSPACE & MULTI-USER ACCESS CONTROL API
+// ==============================================================================
+const multiEntityStore = {
+  entities: [
+    { id: 'ent-ilitha-fintech', code: 'ILITHA', name: 'Ilitha Fintech Operations (Pty) Ltd', sarsTaxNumber: '9304318273', status: 'Active' },
+    { id: 'ent-kalahari-solar', code: 'KALAHARI', name: 'Kalahari Clean Energy (Pty) Ltd', sarsTaxNumber: '9128475012', status: 'Active' },
+    { id: 'ent-tablebay-freight', code: 'TABLEBAY', name: 'Table Bay Freight & Advisory CC', sarsTaxNumber: '9840127364', status: 'Active' }
+  ],
+  members: [
+    { id: 'usr-owner-01', name: 'V Zenzile', role: 'Owner', assignedEntityIds: ['ALL'], status: 'Active' },
+    { id: 'usr-acc-02', name: 'Khanyi M.', role: 'Accountant', assignedEntityIds: ['ALL'], status: 'Active' },
+    { id: 'usr-book-03', name: 'Zola K.', role: 'Bookkeeper', assignedEntityIds: ['ent-ilitha-fintech', 'ent-kalahari-solar'], status: 'Active' },
+    { id: 'usr-aud-04', name: 'Priya N.', role: 'Auditor', assignedEntityIds: ['ent-ilitha-fintech', 'ent-tablebay-freight'], status: 'Active' }
+  ],
+  approvals: [] as any[]
+};
+
+app.get('/api/workspaces', publicDataRateLimiter, (_req, res) => {
+  res.json({
+    success: true,
+    entities: multiEntityStore.entities,
+    members: multiEntityStore.members,
+    approvals: multiEntityStore.approvals
+  });
+});
+
+app.post('/api/workspaces/entities', authRateLimiter, express.json(), (req, res) => {
+  const { entity, userRole = 'Owner', canManageEntities = false } = req.body || {};
+  if (userRole !== 'Owner' && !canManageEntities) {
+    return res.status(403).json({
+      success: false,
+      error: `Access Denied: Role "${userRole}" is not authorized to register business entities.`
+    });
+  }
+  if (!entity?.profile?.name && !entity?.name) {
+    return res.status(400).json({ success: false, error: 'Business entity legal name is required.' });
+  }
+  const record = {
+    id: entity.id || `ent-${Date.now().toString(36)}`,
+    code: entity.code || 'ENTITY',
+    name: entity.profile?.name || entity.name,
+    sarsTaxNumber: entity.profile?.sarsTaxNumber || entity.sarsTaxNumber || '',
+    status: 'Active'
+  };
+  multiEntityStore.entities.push(record);
+  res.status(201).json({ success: true, entity: record });
+});
+
+app.post('/api/workspaces/members', authRateLimiter, express.json(), (req, res) => {
+  const { member, userRole = 'Owner', canManageTeam = false } = req.body || {};
+  if (userRole !== 'Owner' && !canManageTeam) {
+    return res.status(403).json({
+      success: false,
+      error: `Access Denied: Role "${userRole}" cannot invite team members or assign permissions.`
+    });
+  }
+  if (!member?.name || !member?.email) {
+    return res.status(400).json({ success: false, error: 'Member name and email are required.' });
+  }
+  const created = {
+    id: member.id || `usr-${Date.now().toString(36)}`,
+    name: member.name,
+    role: member.role || 'Bookkeeper',
+    assignedEntityIds: member.assignedEntityIds || ['ALL'],
+    status: member.status || 'Active'
+  };
+  multiEntityStore.members.push(created);
+  res.status(201).json({ success: true, member: created });
+});
+
+app.post('/api/workspaces/approvals', authRateLimiter, express.json(), (req, res) => {
+  const { request, userRole = 'Bookkeeper', canEditTransactions = false } = req.body || {};
+  if (userRole === 'Auditor' && !canEditTransactions) {
+    return res.status(403).json({
+      success: false,
+      error: 'Access Denied: View-Only role cannot queue draft submissions.'
+    });
+  }
+  const entry = {
+    id: request?.id || `sub-${Date.now().toString(36)}`,
+    ...request,
+    status: 'PENDING_APPROVAL',
+    preparedAt: new Date().toISOString()
+  };
+  multiEntityStore.approvals.unshift(entry);
+  res.status(201).json({ success: true, approval: entry });
+});
+
+app.patch('/api/workspaces/approvals/:id', authRateLimiter, express.json(), (req, res) => {
+  const { id } = req.params;
+  const { decision, notes = '', userRole = 'Owner', canApproveSubmissions = false, reviewerName = 'Authorised Signatory' } = req.body || {};
+  const isAuthorized = userRole === 'Owner' || userRole === 'Accountant' || Boolean(canApproveSubmissions);
+  if (!isAuthorized) {
+    return res.status(403).json({
+      success: false,
+      error: `Access Denied: Role "${userRole}" lacks Submission Approval permission.`
+    });
+  }
+  const target = multiEntityStore.approvals.find(a => a.id === id);
+  if (target) {
+    target.status = decision;
+    target.reviewNotes = notes;
+    target.reviewedByName = reviewerName;
+    target.reviewedByRole = userRole;
+    target.reviewedAt = new Date().toISOString();
+  }
+  res.json({ success: true, id, decision, reviewedByRole: userRole });
 });
 
 // Environment Configuration & Diagnostics Endpoint

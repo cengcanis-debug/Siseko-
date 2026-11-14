@@ -68,6 +68,7 @@ interface TaxProfessionalConnectProps {
   transactions: TaxTransaction[];
   invoices: InvoiceRecord[];
   currentUserRole: RoleType;
+  checkPermission?: (action: string) => boolean;
   addAuditLog: (action: string, details: string, severity?: 'info' | 'warn' | 'crit') => void;
   showBanner: (msg: string) => void;
   formatZAR: (val: number) => string;
@@ -80,6 +81,7 @@ export const TaxProfessionalConnect: React.FC<TaxProfessionalConnectProps> = ({
   transactions,
   invoices,
   currentUserRole,
+  checkPermission,
   addAuditLog,
   showBanner,
   formatZAR
@@ -184,6 +186,15 @@ export const TaxProfessionalConnect: React.FC<TaxProfessionalConnectProps> = ({
     practitionerId: string, 
     permKey: keyof TaxProfessionalPermissions
   ) => {
+    const canManage = checkPermission
+      ? (checkPermission('canManageTeam') || checkPermission('canApproveSubmissions'))
+      : (currentUserRole === 'Owner' || currentUserRole === 'Accountant');
+    if (!canManage) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot modify practitioner access scopes.`);
+      addAuditLog('ACCESS_DENIED_PRACTITIONER_SCOPE', `Unauthorized attempt by ${currentUserRole} to toggle ${String(permKey)}.`, 'warn');
+      return;
+    }
+
     setPractitioners(prev => prev.map(p => {
       if (p.id !== practitionerId) return p;
       const currentVal = p.permissions[permKey];
@@ -204,6 +215,14 @@ export const TaxProfessionalConnect: React.FC<TaxProfessionalConnectProps> = ({
     practitionerId: string, 
     level: 'FULL_ACCESS' | 'MASK_PERSONAL_IDENTIFIERS' | 'AGGREGATED_ONLY'
   ) => {
+    const canManage = checkPermission
+      ? (checkPermission('canManageTeam') || checkPermission('canApproveSubmissions'))
+      : (currentUserRole === 'Owner' || currentUserRole === 'Accountant');
+    if (!canManage) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot alter POPIA masking rules.`);
+      return;
+    }
+
     setPractitioners(prev => prev.map(p => {
       if (p.id !== practitionerId) return p;
       return { ...p, permissions: { ...p.permissions, dataMaskingLevel: level } };
@@ -216,14 +235,31 @@ export const TaxProfessionalConnect: React.FC<TaxProfessionalConnectProps> = ({
     showBanner(`Data minimization rule updated to ${level}`);
   };
 
-  // Emergency Kill Switch: Revoke All Access
+  const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
+
+  // Emergency Kill Switch: Revoke All Access (iFrame-safe two-click confirmation)
   const handleRevokePractitionerAccess = (practitionerId: string) => {
+    const canManage = checkPermission
+      ? (checkPermission('canManageTeam') || checkPermission('canApproveSubmissions'))
+      : (currentUserRole === 'Owner' || currentUserRole === 'Accountant');
+    if (!canManage) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot trigger Emergency Access Revocation.`);
+      addAuditLog('ACCESS_DENIED_KILL_SWITCH', `Unauthorized kill switch attempt by ${currentUserRole}.`, 'warn');
+      return;
+    }
+
     const target = practitioners.find(p => p.id === practitionerId);
     if (!target) return;
 
-    if (!confirm(`Are you sure you want to revoke all access for ${target.practitionerName}? They will immediately lose access to your financial records, audit vault, and tax returns.`)) {
+    if (pendingRevokeId !== practitionerId) {
+      setPendingRevokeId(practitionerId);
+      showBanner(`⚠️ Click Revoke again to immediately terminate all access for ${target.practitionerName}.`);
+      setTimeout(() => {
+        setPendingRevokeId(prev => (prev === practitionerId ? null : prev));
+      }, 6000);
       return;
     }
+    setPendingRevokeId(null);
 
     setPractitioners(prev => prev.map(p => {
       if (p.id !== practitionerId) return p;
@@ -266,6 +302,14 @@ export const TaxProfessionalConnect: React.FC<TaxProfessionalConnectProps> = ({
 
   // Re-activate or re-invite
   const handleReactivateAccess = (practitionerId: string) => {
+    const canManage = checkPermission
+      ? (checkPermission('canManageTeam') || checkPermission('canApproveSubmissions'))
+      : (currentUserRole === 'Owner' || currentUserRole === 'Accountant');
+    if (!canManage) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot restore practitioner mandates.`);
+      return;
+    }
+
     setPractitioners(prev => prev.map(p => {
       if (p.id !== practitionerId) return p;
       return {
@@ -291,6 +335,13 @@ export const TaxProfessionalConnect: React.FC<TaxProfessionalConnectProps> = ({
   // Create new invitation
   const handleSubmitInvite = (e: React.FormEvent) => {
     e.preventDefault();
+    const canManage = checkPermission
+      ? (checkPermission('canManageTeam') || checkPermission('canApproveSubmissions'))
+      : (currentUserRole === 'Owner' || currentUserRole === 'Accountant');
+    if (!canManage) {
+      showBanner(`⛔ Access Denied: Role "${currentUserRole}" cannot issue practitioner invitations.`);
+      return;
+    }
     if (!inviteForm.name || !inviteForm.email || !inviteForm.sarsPr) {
       showBanner('Please fill in Practitioner Name, Email, and SARS PR Number.');
       return;
@@ -955,10 +1006,14 @@ export const TaxProfessionalConnect: React.FC<TaxProfessionalConnectProps> = ({
                             e.stopPropagation();
                             handleRevokePractitionerAccess(prac.id);
                           }}
-                          className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 cursor-pointer transition font-medium flex items-center gap-1"
+                          className={`px-2.5 py-1 rounded border cursor-pointer transition font-medium flex items-center gap-1 ${
+                            pendingRevokeId === prac.id
+                              ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-400 animate-pulse'
+                              : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border-rose-500/40'
+                          }`}
                         >
                           <ShieldAlert className="w-3 h-3" />
-                          <span>Revoke Access</span>
+                          <span>{pendingRevokeId === prac.id ? 'Confirm Revoke' : 'Revoke Access'}</span>
                         </button>
                       )}
                     </div>

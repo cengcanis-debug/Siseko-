@@ -42,6 +42,7 @@ interface SarsVdpCenterProps {
   addAuditLog: (action: string, details: string, severity?: 'info' | 'warn' | 'crit') => void;
   showBanner: (msg: string) => void;
   onNavigateToShield?: () => void;
+  onSubmitForApproval?: (details: { title: string; period: string; shortfall: number }) => void;
   initialOversight?: {
     title: string;
     desc?: string;
@@ -58,6 +59,7 @@ export const SarsVdpCenter: React.FC<SarsVdpCenterProps> = ({
   addAuditLog,
   showBanner,
   onNavigateToShield,
+  onSubmitForApproval,
   initialOversight
 }) => {
   // Disclosures state
@@ -138,10 +140,31 @@ export const SarsVdpCenter: React.FC<SarsVdpCenterProps> = ({
     showBanner(`🛡️ Proactive Disclosure #${newDossier.vdpRefNumber} drafted! Saved ${formatZAR(newDossier.penaltySavedZAR)} in penalties.`);
   };
 
-  // Sign and Submit VDP Dossier to SARS
+  // Sign and Submit VDP Dossier to SARS (Submission Approval or Dispute Authority required)
   const handleSignAndSubmitVdp = (id: string) => {
-    if (!checkPermission('canEditTransactions')) {
-      showBanner(`⛔ Access Denied: Role ${currentUserRole} cannot submit statutory disclosures.`);
+    const canApproveVdp = checkPermission('canApproveSubmissions') || checkPermission('canManageDisputes');
+    const canEditData = checkPermission('canEditTransactions');
+
+    if (!canApproveVdp && !canEditData) {
+      showBanner(`⛔ Access Denied: Role ${currentUserRole} cannot draft or submit statutory disclosures.`);
+      addAuditLog('ACCESS_DENIED_VDP_SUBMIT', `View-Only role ${currentUserRole} attempted to submit VDP ${id}.`, 'warn');
+      return;
+    }
+
+    const targetDossier = dossiers.find(d => d.id === id);
+    if (!canApproveVdp && onSubmitForApproval && targetDossier) {
+      onSubmitForApproval({
+        title: `VDP01 Disclosure: ${targetDossier.oversightTitle}`,
+        period: targetDossier.taxPeriod,
+        shortfall: targetDossier.understatedTaxShortfallZAR
+      });
+      setInspectingDossier(null);
+      return;
+    }
+
+    if (!canApproveVdp) {
+      showBanner(`⛔ Access Denied: Role ${currentUserRole} lacks Submission Approval authority to transmit VDP dossiers to SARS.`);
+      addAuditLog('ACCESS_DENIED_VDP_SUBMIT', `Role ${currentUserRole} blocked from transmitting VDP ${id} without approval.`, 'warn');
       return;
     }
 

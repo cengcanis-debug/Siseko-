@@ -1,4 +1,4 @@
-import { RoleType, AppSession } from '../types';
+import { RoleType, AppSession, RolePermissions, TeamMember, BusinessEntityWorkspace } from '../types';
 
 /**
  * Generates a cryptographically secure hex string of given byte length.
@@ -24,6 +24,105 @@ export function generateTokenHex(byteLength: number = 32): string {
 }
 
 /**
+ * Returns the default granular permissions matrix for a given RoleType.
+ */
+export function getDefaultPermissionsForRole(role: RoleType): RolePermissions {
+  switch (role) {
+    case 'Owner':
+      return {
+        canViewTaxProjections: true,
+        canEditTransactions: true,
+        canDeleteTransactions: true,
+        canScanInvoices: true,
+        canApproveInvoices: true,
+        canApproveSubmissions: true,
+        canManageTeam: true,
+        canManageEntities: true,
+        canManageDisputes: true,
+        canManageSuccession: true,
+        canDownloadCSV: true
+      };
+    case 'Accountant':
+      return {
+        canViewTaxProjections: true,
+        canEditTransactions: true,
+        canDeleteTransactions: true,
+        canScanInvoices: true,
+        canApproveInvoices: true,
+        canApproveSubmissions: true,
+        canManageTeam: false,
+        canManageEntities: false,
+        canManageDisputes: true,
+        canManageSuccession: false,
+        canDownloadCSV: true
+      };
+    case 'Bookkeeper':
+      return {
+        canViewTaxProjections: true,
+        canEditTransactions: true,
+        canDeleteTransactions: false,
+        canScanInvoices: true,
+        canApproveInvoices: false,
+        canApproveSubmissions: false,
+        canManageTeam: false,
+        canManageEntities: false,
+        canManageDisputes: false,
+        canManageSuccession: false,
+        canDownloadCSV: false
+      };
+    case 'Auditor':
+      return {
+        canViewTaxProjections: true,
+        canEditTransactions: false,
+        canDeleteTransactions: false,
+        canScanInvoices: false,
+        canApproveInvoices: false,
+        canApproveSubmissions: false,
+        canManageTeam: false,
+        canManageEntities: false,
+        canManageDisputes: false,
+        canManageSuccession: false,
+        canDownloadCSV: true
+      };
+    case 'Custom':
+    default:
+      return {
+        canViewTaxProjections: true,
+        canEditTransactions: false,
+        canDeleteTransactions: false,
+        canScanInvoices: false,
+        canApproveInvoices: false,
+        canApproveSubmissions: false,
+        canManageTeam: false,
+        canManageEntities: false,
+        canManageDisputes: false,
+        canManageSuccession: false,
+        canDownloadCSV: false
+      };
+  }
+}
+
+/**
+ * Derives cryptographic scope tokens from explicit permissions.
+ */
+export function getScopesFromPermissions(perms: Partial<RolePermissions>, role: RoleType): string[] {
+  const scopes: string[] = ['session:view'];
+  if (perms.canViewTaxProjections) scopes.push('reports:read', 'projections:view');
+  if (perms.canEditTransactions) scopes.push('transactions:edit', 'logbook:entry');
+  if (perms.canDeleteTransactions) scopes.push('transactions:delete');
+  if (perms.canScanInvoices) scopes.push('invoices:scan');
+  if (perms.canApproveInvoices) scopes.push('invoices:approve');
+  if (perms.canApproveSubmissions) scopes.push('sars:vat201:file', 'sars:irp6:pay', 'sars:submissions:approve');
+  if (perms.canManageDisputes) scopes.push('sars:ita34:objection', 'vault:seal');
+  if (perms.canDownloadCSV) scopes.push('ledger:export');
+  if (perms.canManageTeam) scopes.push('team:manage');
+  if (perms.canManageEntities) scopes.push('entities:manage');
+  if (role === 'Owner' || role === 'Accountant') scopes.push('session:rotate');
+  if (role === 'Auditor') scopes.push('audit:read_all', 'vault:verify');
+  return Array.from(new Set(scopes));
+}
+
+/**
  * Assigns statutory and security authorization scopes based on RoleType.
  */
 export function getRoleScopes(role: RoleType): string[] {
@@ -37,6 +136,8 @@ export function getRoleScopes(role: RoleType): string[] {
         'vault:seal',
         'ledger:export',
         'team:manage',
+        'entities:manage',
+        'sars:submissions:approve',
         'session:rotate'
       ];
     case 'Accountant':
@@ -47,6 +148,7 @@ export function getRoleScopes(role: RoleType): string[] {
         'sars:irp6:pay',
         'vault:seal',
         'ledger:export',
+        'sars:submissions:approve',
         'session:rotate'
       ];
     case 'Bookkeeper':
@@ -191,28 +293,71 @@ export function createDefaultSession(role: RoleType = 'Owner'): AppSession {
   return createSession({ role });
 }
 
-export function isRoleAuthorized(role: RoleType, permissionOrScope: string): boolean {
+export function hasEntityAccess(member: TeamMember | undefined | null, entityId: string): boolean {
+  if (!member) return true;
+  if (member.status === 'Suspended') return false;
+  if (!member.assignedEntityIds || member.assignedEntityIds.length === 0) return true;
+  return member.assignedEntityIds.includes('ALL') || member.assignedEntityIds.includes(entityId);
+}
+
+export function filterAuthorizedEntities(
+  entities: BusinessEntityWorkspace[],
+  member: TeamMember | undefined | null,
+  includeArchived: boolean = false
+): BusinessEntityWorkspace[] {
+  return entities.filter(ent => {
+    if (!includeArchived && ent.status !== 'Active') return false;
+    return hasEntityAccess(member, ent.id);
+  });
+}
+
+export function isRoleAuthorized(
+  role: RoleType,
+  permissionOrScope: string,
+  customPermissions?: Partial<RolePermissions>
+): boolean {
+  const effectivePerms: RolePermissions = {
+    ...getDefaultPermissionsForRole(role),
+    ...(customPermissions || {})
+  };
+
   switch (permissionOrScope) {
     case 'canEditTransactions':
-      return role === 'Owner' || role === 'Accountant' || role === 'Bookkeeper';
+    case 'canDataEntry':
+      return Boolean(effectivePerms.canEditTransactions);
     case 'canDeleteTransactions':
-      return role === 'Owner' || role === 'Accountant';
+      return Boolean(effectivePerms.canDeleteTransactions);
     case 'canScanInvoices':
-      return role === 'Owner' || role === 'Accountant' || role === 'Bookkeeper';
+      return Boolean(effectivePerms.canScanInvoices);
     case 'canApproveInvoices':
-      return role === 'Owner' || role === 'Accountant';
+    case 'approve_invoices':
+      return Boolean(effectivePerms.canApproveInvoices);
     case 'canAccessTaxProjections':
-      return true; // All roles can inspect tax projections
+    case 'canViewTaxProjections':
+    case 'canViewOnly':
+      return Boolean(effectivePerms.canViewTaxProjections);
     case 'canDownloadLedger':
     case 'canDownloadLedgerCSV':
-      return role === 'Owner' || role === 'Accountant' || role === 'Auditor';
+    case 'canDownloadCSV':
+      return Boolean(effectivePerms.canDownloadCSV);
     case 'canFileSARS':
-      return role === 'Owner' || role === 'Accountant';
+    case 'canApproveSubmissions':
+      return Boolean(effectivePerms.canApproveSubmissions);
     case 'canDraftObjection':
-      return role === 'Owner' || role === 'Accountant';
+    case 'canManageDisputes':
+      return Boolean(effectivePerms.canManageDisputes);
+    case 'canManageTeam':
+      return Boolean(effectivePerms.canManageTeam);
+    case 'canManageEntities':
+      return Boolean(effectivePerms.canManageEntities);
+    case 'canManageSuccession':
+      return Boolean(effectivePerms.canManageSuccession);
     default: {
-      const scopes = getRoleScopes(role);
+      const scopes = customPermissions
+        ? getScopesFromPermissions(effectivePerms, role)
+        : getRoleScopes(role);
       return scopes.includes(permissionOrScope);
     }
   }
 }
+

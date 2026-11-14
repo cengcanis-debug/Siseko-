@@ -36,6 +36,7 @@ interface Emp501InterimReconciliationProps {
   addAuditLog: (action: string, details: string, severity?: 'info' | 'warn' | 'crit') => void;
   showBanner: (msg: string) => void;
   onNavigateToTaxPro?: () => void;
+  onSubmitForApproval?: (details: { period: string; title: string; netLiability: number }) => void;
 }
 
 type Emp501Tab = 'monthly_recon' | 'irp5_certificates' | 'eti_audit' | 'sars_submission';
@@ -46,7 +47,8 @@ export const Emp501InterimReconciliation: React.FC<Emp501InterimReconciliationPr
   checkPermission,
   addAuditLog,
   showBanner,
-  onNavigateToTaxPro
+  onNavigateToTaxPro,
+  onSubmitForApproval
 }) => {
   // Tab State
   const [activeTab, setActiveTab] = useState<Emp501Tab>('monthly_recon');
@@ -81,8 +83,9 @@ export const Emp501InterimReconciliation: React.FC<Emp501InterimReconciliationPr
 
   const isBalanced = Math.abs(overallVariance) === 0 && Math.abs(certificateTaxDiscrepancy) === 0;
 
-  // Authorization Check
-  const canSubmit = currentUserRole === 'Owner' || currentUserRole === 'Accountant';
+  // Authorization Check (supports Custom role granular Submission Approval overrides)
+  const canSubmit = checkPermission('canApproveSubmissions') || checkPermission('canFileSARS');
+  const canEditData = checkPermission('canEditTransactions');
 
   // Handle Monthly Record Edit (Simulated adjustment)
   const handleUpdatePayment = (monthKey: string, newPayment: number) => {
@@ -122,6 +125,7 @@ export const Emp501InterimReconciliation: React.FC<Emp501InterimReconciliationPr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           role: currentUserRole,
+          canApproveSubmissions: canSubmit,
           declaration,
           monthlyRecords,
           certificates
@@ -288,18 +292,41 @@ export const Emp501InterimReconciliation: React.FC<Emp501InterimReconciliationPr
             )}
 
             {declaration.status !== 'SUBMITTED_CONFIRMED' && (
-              <button
-                onClick={() => setShowConfirmModal(true)}
-                disabled={!canSubmit || !isBalanced}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg ${
-                  canSubmit && isBalanced
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-950/40'
-                    : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                }`}
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Submit Interim EMP501</span>
-              </button>
+              canSubmit ? (
+                <button
+                  onClick={() => setShowConfirmModal(true)}
+                  disabled={!isBalanced}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg ${
+                    isBalanced
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-950/40'
+                      : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                  }`}
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Submit Interim EMP501</span>
+                </button>
+              ) : canEditData && onSubmitForApproval ? (
+                <button
+                  onClick={() =>
+                    onSubmitForApproval({
+                      period: declaration.taxPeriod || '202608',
+                      title: `EMP501 Interim Reconciliation (${profile.name})`,
+                      netLiability
+                    })
+                  }
+                  disabled={!isBalanced}
+                  className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-50"
+                  id="submit-emp501-for-approval-btn"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Submit EMP501 for Approval</span>
+                </button>
+              ) : (
+                <span className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/5 border border-white/10 text-slate-400 inline-flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>View-Only Access</span>
+                </span>
+              )
             )}
           </div>
         </div>

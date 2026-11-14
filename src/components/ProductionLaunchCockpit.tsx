@@ -157,6 +157,17 @@ export const ProductionLaunchCockpit: React.FC<ProductionLaunchCockpitProps> = (
       actionLabel: 'Launch Audit Shield',
       stat: '12,450 km Verified Distance',
       badge: 'Vault Sealed'
+    },
+    {
+      id: 'multi_entity_access',
+      title: 'Multi-Entity & RBAC Governance',
+      category: 'Enterprise Access',
+      description: 'Manage multiple South African entities under one account with granular per-user permissions and submission approval queues.',
+      icon: Users,
+      color: 'cyan',
+      actionLabel: 'Manage Entities & Roles',
+      stat: '3 Active Entity Workspaces',
+      badge: 'RBAC Active'
     }
   ];
 
@@ -340,6 +351,7 @@ export const ProductionLaunchCockpit: React.FC<ProductionLaunchCockpitProps> = (
               <option value="Accountant">Accountant</option>
               <option value="Bookkeeper">Bookkeeper</option>
               <option value="Auditor">Auditor</option>
+              <option value="Custom">Custom</option>
             </select>
           </div>
           <p className="text-[11px] text-slate-400">
@@ -354,11 +366,11 @@ export const ProductionLaunchCockpit: React.FC<ProductionLaunchCockpitProps> = (
           <div>
             <h2 className="text-lg font-bold text-white tracking-tight">Compliance Modules & Tools</h2>
             <p className="text-xs text-slate-400">
-              Direct access into all 8 compliance pillars configured for South African statutory standards.
+              Direct access into all {launchPillars.length} compliance pillars configured for South African statutory standards.
             </p>
           </div>
           <div className="text-xs font-mono text-slate-400">
-            8 Modules Activated
+            {launchPillars.length} Modules Activated
           </div>
         </div>
 

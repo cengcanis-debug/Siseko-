@@ -33,6 +33,7 @@ interface PopiaComplianceCenterModalProps {
   onClose: () => void;
   profile: UserTaxProfile;
   currentUserRole: RoleType;
+  checkPermission?: (action: string) => boolean;
   showBanner: (msg: string) => void;
   addAuditLog?: (action: string, details: string, severity?: 'info' | 'warn' | 'crit') => void;
 }
@@ -42,6 +43,7 @@ export const PopiaComplianceCenterModal: React.FC<PopiaComplianceCenterModalProp
   onClose,
   profile,
   currentUserRole,
+  checkPermission,
   showBanner = (_msg?: string) => {},
   addAuditLog = (_action?: string, _details?: string, _severity?: 'info' | 'warn' | 'crit') => {}
 }) => {
@@ -55,7 +57,9 @@ export const PopiaComplianceCenterModal: React.FC<PopiaComplianceCenterModalProp
 
   if (!isOpen) return null;
 
-  const canRevealPII = currentUserRole === 'Owner' || currentUserRole === 'Accountant';
+  const canRevealPII = checkPermission
+    ? (checkPermission('canApproveSubmissions') || checkPermission('canManageTeam'))
+    : (currentUserRole === 'Owner' || currentUserRole === 'Accountant');
 
   const handleExecuteStorageScrub = async () => {
     setIsScrubbing(true);
