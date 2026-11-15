@@ -45,6 +45,9 @@ import {
   validateCipcRegistrationNumber,
   validateSarsTaxReferenceNumber
 } from '../utils/formatValidation';
+import { IUserRepository, UserStatus } from '../types/user';
+import { mapTeamStatusToUserStatus, mapUserStatusToTeamStatus } from '../services/userRepository';
+import { useUser } from '../hooks/useUser';
 
 interface MultiEntityAccessHubProps {
   entities: BusinessEntityWorkspace[];
@@ -53,6 +56,7 @@ interface MultiEntityAccessHubProps {
   onCreateEntity: (entity: BusinessEntityWorkspace) => void;
   onUpdateEntityProfile: (entityId: string, updatedProfile: Partial<UserTaxProfile>, meta?: { sector?: string; financialYearEnd?: string; code?: string }) => void;
   onToggleArchiveEntity: (entityId: string) => void;
+  userRepository?: IUserRepository;
   teamMembers: TeamMember[];
   activeUserId: string;
   onSwitchActiveUser: (userId: string) => void;
@@ -90,6 +94,7 @@ export const MultiEntityAccessHub: React.FC<MultiEntityAccessHubProps> = ({
   onCreateEntity,
   onUpdateEntityProfile,
   onToggleArchiveEntity,
+  userRepository,
   teamMembers,
   activeUserId,
   onSwitchActiveUser,
@@ -131,6 +136,7 @@ export const MultiEntityAccessHub: React.FC<MultiEntityAccessHubProps> = ({
   const [memberEmail, setMemberEmail] = useState('');
   const [memberTitle, setMemberTitle] = useState('');
   const [memberRole, setMemberRole] = useState<RoleType>('Bookkeeper');
+  const [memberStatus, setMemberStatus] = useState<UserStatus>('active');
   const [memberPerms, setMemberPerms] = useState<RolePermissions>(getDefaultPermissionsForRole('Bookkeeper'));
   const [memberEntityScope, setMemberEntityScope] = useState<'ALL' | 'SELECTED'>('ALL');
   const [memberEntityIds, setMemberEntityIds] = useState<string[]>([]);
@@ -148,6 +154,8 @@ export const MultiEntityAccessHub: React.FC<MultiEntityAccessHubProps> = ({
   // Audit Log Filter
   const [auditSearch, setAuditSearch] = useState('');
   const [auditEntityFilter, setAuditEntityFilter] = useState<string>('ALL');
+
+  const { user: activeRepoUser, loading: activeUserLoading } = useUser(activeUserId, userRepository);
 
   const activeUser = useMemo(
     () => teamMembers.find(m => m.id === activeUserId) || teamMembers[0],
@@ -345,6 +353,7 @@ export const MultiEntityAccessHub: React.FC<MultiEntityAccessHubProps> = ({
     setMemberEmail('');
     setMemberTitle('');
     setMemberRole('Bookkeeper');
+    setMemberStatus('active');
     setMemberPerms(getDefaultPermissionsForRole('Bookkeeper'));
     setMemberEntityScope('ALL');
     setMemberEntityIds(entities.map(e => e.id));
@@ -362,6 +371,7 @@ export const MultiEntityAccessHub: React.FC<MultiEntityAccessHubProps> = ({
     setMemberEmail(member.email);
     setMemberTitle(member.title || '');
     setMemberRole(member.role);
+    setMemberStatus(mapTeamStatusToUserStatus(member.status));
     setMemberPerms({ ...getDefaultPermissionsForRole(member.role), ...member.permissions });
     const isAll = !member.assignedEntityIds || member.assignedEntityIds.includes('ALL');
     setMemberEntityScope(isAll ? 'ALL' : 'SELECTED');
@@ -391,7 +401,7 @@ export const MultiEntityAccessHub: React.FC<MultiEntityAccessHubProps> = ({
     );
   };
 
-  const handleSaveMember = (e: React.FormEvent) => {
+  const handleSaveMember = async (e: React.FormEvent) => {
     e.preventDefault();
     setUserFormError(null);
 
@@ -411,15 +421,39 @@ export const MultiEntityAccessHub: React.FC<MultiEntityAccessHubProps> = ({
     const assignedEntityIds = memberEntityScope === 'ALL' ? ['ALL'] : memberEntityIds;
 
     if (editingMemberId) {
-      onUpdateMember(editingMemberId, {
-        name: memberName.trim(),
-        email: memberEmail.trim(),
-        title: memberTitle.trim() || undefined,
-        role: memberRole,
-        permissions: memberPerms,
-        assignedEntityIds
-      });
-      setIsUserFormOpen(false);
+      if (editingMemberId === activeUserId && memberStatus === 'suspended') {
+        setUserFormError('Cannot suspend the currently signed-in active user.');
+        return;
+      }
+
+      try {
+        if (userRepository) {
+          await userRepository.updateUser(editingMemberId, {
+            name: memberName.trim(),
+            email: memberEmail.trim(),
+            status: memberStatus
+          });
+          onUpdateMember(editingMemberId, {
+            title: memberTitle.trim() || undefined,
+            role: memberRole,
+            permissions: memberPerms,
+            assignedEntityIds
+          });
+        } else {
+          onUpdateMember(editingMemberId, {
+            name: memberName.trim(),
+            email: memberEmail.trim(),
+            status: mapUserStatusToTeamStatus(memberStatus),
+            title: memberTitle.trim() || undefined,
+            role: memberRole,
+            permissions: memberPerms,
+            assignedEntityIds
+          });
+        }
+        setIsUserFormOpen(false);
+      } catch (err: any) {
+        setUserFormError(err?.message || 'Failed to update user details.');
+      }
     } else {
       const newMember: TeamMember = {
         id: `usr-${Date.now().toString(36)}`,
@@ -429,7 +463,7 @@ export const MultiEntityAccessHub: React.FC<MultiEntityAccessHubProps> = ({
         role: memberRole,
         permissions: memberPerms,
         assignedEntityIds,
-        status: 'Active',
+        status: mapUserStatusToTeamStatus(memberStatus),
         joinedAt: new Date().toISOString().split('T')[0],
         lastActiveAt: 'Just added'
       };
@@ -647,8 +681,10 @@ export const MultiEntityAccessHub: React.FC<MultiEntityAccessHubProps> = ({
           <div className="text-2xl font-bold font-mono tabular-nums text-cyan-300">
             {consolidatedMetrics.activeUsersCount} Users · {consolidatedMetrics.pendingApprovals} Pending
           </div>
-          <span className="text-[11px] text-slate-400">
-            Role standing: {currentUserRole}
+          <span className="text-[11px] text-slate-400 block truncate">
+            {activeUserLoading
+              ? `Role standing: ${currentUserRole}`
+              : `${activeRepoUser?.name || activeUser?.name} · ${activeRepoUser?.status || 'active'} · ${currentUserRole}`}
           </span>
         </div>
       </div>
@@ -1581,6 +1617,20 @@ export const MultiEntityAccessHub: React.FC<MultiEntityAccessHubProps> = ({
                   <option value="Bookkeeper">Bookkeeper (Data Entry Only)</option>
                   <option value="Auditor">Auditor (View-Only & Audit CSV)</option>
                   <option value="Custom">Custom (Granular Permissions)</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-slate-400 block mb-1">Account Status</label>
+                <select
+                  value={memberStatus}
+                  onChange={(e) => setMemberStatus(e.target.value as UserStatus)}
+                  className="w-full bg-slate-950 border border-white/15 rounded-lg px-3 py-2 text-white"
+                  id="member-status-select"
+                >
+                  <option value="active">Active (Full Assigned Access)</option>
+                  <option value="pending">Pending (Awaiting Onboarding Acceptance)</option>
+                  <option value="suspended">Suspended (Access Revoked)</option>
                 </select>
               </div>
             </div>

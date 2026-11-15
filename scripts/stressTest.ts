@@ -41,6 +41,15 @@ import {
   getEmp201DueDate,
   getUpcomingTaxDeadlines
 } from '../src/utils/taxDeadlines';
+import { IUserRepository, User } from '../src/types/user';
+import {
+  TeamMemberUserRepository,
+  mapTeamStatusToUserStatus,
+  mapUserStatusToTeamStatus
+} from '../src/services/userRepository';
+import { MockUserRepository } from '../src/services/mockUserRepository';
+import { ApiUserRepository } from '../src/services/apiUserRepository';
+import { UserRepositoryFactory, userRepository as defaultUserRepository } from '../src/services/userRepositoryFactory';
 import crypto from 'crypto';
 
 interface TestResult {
@@ -57,6 +66,18 @@ function recordTest(suite: string, name: string, fn: () => void) {
   const start = performance.now();
   try {
     fn();
+    const durationMs = performance.now() - start;
+    results.push({ suite, name, passed: true, durationMs });
+  } catch (err: any) {
+    const durationMs = performance.now() - start;
+    results.push({ suite, name, passed: false, durationMs, details: err.message });
+  }
+}
+
+async function recordAsyncTest(suite: string, name: string, fn: () => Promise<void>) {
+  const start = performance.now();
+  try {
+    await fn();
     const durationMs = performance.now() - start;
     results.push({ suite, name, passed: true, durationMs });
   } catch (err: any) {
@@ -1266,6 +1287,170 @@ recordTest('TAX_DEADLINE_ALERTS', 'VAT201 last-business-day, EMP201 7th rollback
   const nonVatDeadlines = getUpcomingTaxDeadlines(nonVatEntity, 0, refDate);
   if (nonVatDeadlines.some(d => d.taxType === 'VAT201')) {
     throw new Error('Non-VAT registered entity must not generate VAT201 deadline alerts');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SUITE 19: USER & IUserRepository CONTRACT STRESS TEST
+// ---------------------------------------------------------------------------
+console.log('▶ [19/19] Executing User & IUserRepository Contract Stress Test...');
+await recordAsyncTest('USER_REPOSITORY', 'getUser, updateUser, status mapping & validation rules', async () => {
+  let membersStore = INITIAL_TEAM_MEMBERS.map(m => ({ ...m }));
+  const repo: IUserRepository = new TeamMemberUserRepository({
+    getMembers: () => membersStore,
+    applyMemberUpdate: (id, updates) => {
+      membersStore = membersStore.map(m => (m.id === id ? { ...m, ...updates } : m));
+    }
+  });
+
+  // Test 1: getUser retrieves normalized User object
+  const owner: User = await repo.getUser('usr-owner-01');
+  if (owner.id !== 'usr-owner-01' || owner.status !== 'active' || !owner.email.includes('@')) {
+    throw new Error(`Unexpected User payload returned by getUser: ${JSON.stringify(owner)}`);
+  }
+
+  // Test 2: updateUser updates partial fields (name, email, status)
+  const updated = await repo.updateUser('usr-book-03', {
+    name: 'Zola Khumalo',
+    email: 'zola.khumalo@ilithafintech.co.za',
+    status: 'pending'
+  });
+  if (updated.name !== 'Zola Khumalo' || updated.status !== 'pending') {
+    throw new Error('updateUser did not apply name/status update');
+  }
+  const refetched = await repo.getUser('usr-book-03');
+  if (refetched.email !== 'zola.khumalo@ilithafintech.co.za' || refetched.status !== 'pending') {
+    throw new Error('getUser after updateUser did not persist changes');
+  }
+
+  // Test 3: Status mapping symmetry
+  for (const s of ['active', 'pending', 'suspended'] as const) {
+    if (mapTeamStatusToUserStatus(mapUserStatusToTeamStatus(s)) !== s) {
+      throw new Error(`Status round-trip failed for '${s}'`);
+    }
+  }
+
+  // Test 4: Validation rejects invalid email and missing user ID
+  let rejectedEmail = false;
+  try {
+    await repo.updateUser('usr-book-03', { email: 'invalid-email' });
+  } catch {
+    rejectedEmail = true;
+  }
+  if (!rejectedEmail) {
+    throw new Error('updateUser must reject invalid email format');
+  }
+
+  let rejectedMissing = false;
+  try {
+    await repo.getUser('non-existent-id');
+  } catch {
+    rejectedMissing = true;
+  }
+  if (!rejectedMissing) {
+    throw new Error('getUser must reject unknown user ID');
+  }
+
+  // Test 5: MockUserRepository sandbox contract
+  const mockRepo: IUserRepository = new MockUserRepository({ simulatedLatencyMs: 0 });
+  const alice = await mockRepo.getUser('1');
+  if (alice.name !== 'Alice Mock' || alice.status !== 'active') {
+    throw new Error(`Expected Alice Mock from MockUserRepository, got ${JSON.stringify(alice)}`);
+  }
+  const bobUpdated = await mockRepo.updateUser('2', { status: 'active', name: 'Bob Verified' });
+  if (bobUpdated.id !== '2' || bobUpdated.status !== 'active' || bobUpdated.name !== 'Bob Verified') {
+    throw new Error(`MockUserRepository updateUser failed: ${JSON.stringify(bobUpdated)}`);
+  }
+  let mockMissing = false;
+  try {
+    await mockRepo.getUser('999');
+  } catch {
+    mockMissing = true;
+  }
+  if (!mockMissing) {
+    throw new Error('MockUserRepository must throw when user is missing');
+  }
+
+  // Test 6: ApiUserRepository sandbox/backend HTTP contract
+  const originalFetch = globalThis.fetch;
+  try {
+    const calls: Array<{ url: string; method: string; body?: string }> = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+      calls.push({ url, method, body: typeof init?.body === 'string' ? init.body : undefined });
+
+      if (url.endsWith('/users/usr-owner-01') && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            id: 'usr-owner-01',
+            name: 'V Zenzile',
+            email: 'vzenzile@ilithafintech.co.za',
+            status: 'active'
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/users/usr-owner-01') && method === 'PATCH') {
+        const parsed = JSON.parse(String(init?.body || '{}'));
+        return new Response(
+          JSON.stringify({
+            success: true,
+            user: {
+              id: 'usr-owner-01',
+              name: parsed.name || 'V Zenzile',
+              email: parsed.email || 'vzenzile@ilithafintech.co.za',
+              status: parsed.status || 'active'
+            }
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify({ error: 'User not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }) as typeof fetch;
+
+    const apiRepo: IUserRepository = new ApiUserRepository('/api/');
+    const fetched = await apiRepo.getUser('usr-owner-01');
+    if (fetched.id !== 'usr-owner-01' || fetched.status !== 'active') {
+      throw new Error(`ApiUserRepository.getUser returned unexpected payload: ${JSON.stringify(fetched)}`);
+    }
+    if (calls[0]?.url !== '/api/users/usr-owner-01') {
+      throw new Error(`Expected normalized URL '/api/users/usr-owner-01', got '${calls[0]?.url}'`);
+    }
+
+    const patched = await apiRepo.updateUser('usr-owner-01', { status: 'pending', name: 'V. Zenzile' });
+    if (patched.status !== 'pending' || patched.name !== 'V. Zenzile') {
+      throw new Error(`ApiUserRepository.updateUser returned unexpected payload: ${JSON.stringify(patched)}`);
+    }
+
+    let apiNotFound = false;
+    try {
+      await apiRepo.getUser('missing-user');
+    } catch {
+      apiNotFound = true;
+    }
+    if (!apiNotFound) {
+      throw new Error('ApiUserRepository must throw when API returns non-OK status');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // Test 7: UserRepositoryFactory environment adapter switching
+  const factoryMock = UserRepositoryFactory.create({ dataSource: 'mock' });
+  const factoryApi = UserRepositoryFactory.create({ dataSource: 'api', sandboxApiUrl: 'https://sandbox.api.example.com' });
+  if (!(factoryMock instanceof MockUserRepository)) {
+    throw new Error('UserRepositoryFactory.create({ dataSource: "mock" }) must return MockUserRepository');
+  }
+  if (!(factoryApi instanceof ApiUserRepository)) {
+    throw new Error('UserRepositoryFactory.create({ dataSource: "api" }) must return ApiUserRepository');
+  }
+  if (typeof defaultUserRepository.getUser !== 'function' || typeof defaultUserRepository.updateUser !== 'function') {
+    throw new Error('Default userRepository singleton must implement IUserRepository');
   }
 });
 

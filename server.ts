@@ -3988,13 +3988,93 @@ const multiEntityStore = {
     { id: 'ent-tablebay-freight', code: 'TABLEBAY', name: 'Table Bay Freight & Advisory CC', sarsTaxNumber: '9840127364', status: 'Active' }
   ],
   members: [
-    { id: 'usr-owner-01', name: 'V Zenzile', role: 'Owner', assignedEntityIds: ['ALL'], status: 'Active' },
-    { id: 'usr-acc-02', name: 'Khanyi M.', role: 'Accountant', assignedEntityIds: ['ALL'], status: 'Active' },
-    { id: 'usr-book-03', name: 'Zola K.', role: 'Bookkeeper', assignedEntityIds: ['ent-ilitha-fintech', 'ent-kalahari-solar'], status: 'Active' },
-    { id: 'usr-aud-04', name: 'Priya N.', role: 'Auditor', assignedEntityIds: ['ent-ilitha-fintech', 'ent-tablebay-freight'], status: 'Active' }
+    { id: 'usr-owner-01', name: 'V Zenzile', email: 'vzenzile@ilithafintech.co.za', role: 'Owner', assignedEntityIds: ['ALL'], status: 'Active' },
+    { id: 'usr-acc-02', name: 'Khanyi M.', email: 'khanyi@kma-taxpractitioners.co.za', role: 'Accountant', assignedEntityIds: ['ALL'], status: 'Active' },
+    { id: 'usr-book-03', name: 'Zola K.', email: 'zola.k@ilithafintech.co.za', role: 'Bookkeeper', assignedEntityIds: ['ent-ilitha-fintech', 'ent-kalahari-solar'], status: 'Active' },
+    { id: 'usr-aud-04', name: 'Priya N.', email: 'priya.n@shieldaudit.co.za', role: 'Auditor', assignedEntityIds: ['ent-ilitha-fintech', 'ent-tablebay-freight'], status: 'Active' },
+    { id: 'usr-cust-05', name: 'S Cengcani', email: 'cengcanis@gmail.com', role: 'Custom', assignedEntityIds: ['ALL'], status: 'Active' }
   ],
   approvals: [] as any[]
 };
+
+function toUserContractStatus(status: string): 'active' | 'pending' | 'suspended' {
+  const lower = String(status || '').toLowerCase();
+  if (lower.includes('suspend')) return 'suspended';
+  if (lower.includes('pend')) return 'pending';
+  return 'active';
+}
+
+function toMemberDisplayStatus(status: 'active' | 'pending' | 'suspended'): 'Active' | 'Pending Invite' | 'Suspended' {
+  if (status === 'suspended') return 'Suspended';
+  if (status === 'pending') return 'Pending Invite';
+  return 'Active';
+}
+
+function serializeUserContract(member: { id: string; name: string; email?: string; status: string }) {
+  return {
+    id: member.id,
+    name: member.name,
+    email: member.email || `${member.id}@ilithafintech.co.za`,
+    status: toUserContractStatus(member.status)
+  };
+}
+
+app.get('/api/users/:id', publicDataRateLimiter, (req, res) => {
+  const member = multiEntityStore.members.find(m => m.id === req.params.id);
+  if (!member) {
+    return res.status(404).json({ success: false, error: `User not found: ${req.params.id}` });
+  }
+  const user = serializeUserContract(member);
+  return res.json({ success: true, user, ...user });
+});
+
+app.patch('/api/users/:id', authRateLimiter, express.json(), (req, res) => {
+  const userRole = String(req.headers['x-user-role'] || req.body?.userRole || 'Owner');
+  const canManageTeam =
+    String(req.headers['x-can-manage-team'] || '').toLowerCase() === 'true' ||
+    Boolean(req.body?.canManageTeam);
+
+  if (userRole !== 'Owner' && !canManageTeam) {
+    return res.status(403).json({
+      success: false,
+      error: `Access Denied: Role "${userRole}" lacks team management permissions.`
+    });
+  }
+
+  const member = multiEntityStore.members.find(m => m.id === req.params.id);
+  if (!member) {
+    return res.status(404).json({ success: false, error: `User not found: ${req.params.id}` });
+  }
+
+  const { name, email, status } = req.body || {};
+
+  if (name !== undefined) {
+    if (typeof name !== 'string' || name.trim().length < 2) {
+      return res.status(400).json({ success: false, error: 'User name must be at least 2 characters.' });
+    }
+    member.name = name.trim();
+  }
+
+  if (email !== undefined) {
+    if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return res.status(400).json({ success: false, error: 'Valid email address is required.' });
+    }
+    member.email = email.trim();
+  }
+
+  if (status !== undefined) {
+    if (!['active', 'pending', 'suspended'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Status must be one of: active, pending, suspended.'
+      });
+    }
+    member.status = toMemberDisplayStatus(status);
+  }
+
+  const user = serializeUserContract(member);
+  return res.json({ success: true, user, ...user });
+});
 
 app.get('/api/workspaces', publicDataRateLimiter, (_req, res) => {
   res.json({
@@ -4041,6 +4121,7 @@ app.post('/api/workspaces/members', authRateLimiter, express.json(), (req, res) 
   const created = {
     id: member.id || `usr-${Date.now().toString(36)}`,
     name: member.name,
+    email: member.email,
     role: member.role || 'Bookkeeper',
     assignedEntityIds: member.assignedEntityIds || ['ALL'],
     status: member.status || 'Active'

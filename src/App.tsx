@@ -117,6 +117,8 @@ import { MultiEntityAccessHub } from './components/MultiEntityAccessHub';
 import { TaxDeadlineAlertBell } from './components/TaxDeadlineAlertBell';
 import { auditTransaction } from './utils/sarsPreAuditEngine';
 import { TransactionPreAuditResult } from './types';
+import { IUserRepository } from './types/user';
+import { TeamMemberUserRepository, mapTeamStatusToUserStatus } from './services/userRepository';
 import { systemBus, downloadBlobFile, generateSubmissionRef } from './utils/systemBridge';
 
 type NavTab =
@@ -645,17 +647,77 @@ export default function App() {
     setTeamMembers(prev =>
       prev.map(m => (m.id === memberId ? { ...m, ...updates } : m))
     );
-    if (memberId === activeUserId && updates.permissions && updates.role) {
-      setCurrentUserRole(updates.role);
+    if (memberId === activeUserId) {
+      if (updates.permissions && updates.role) {
+        setCurrentUserRole(updates.role);
+      }
       setSession(prev => ({
         ...prev,
-        role: updates.role!,
-        scopes: getScopesFromPermissions(updates.permissions!, updates.role!)
+        userName: updates.name ?? prev.userName,
+        userEmail: updates.email ?? prev.userEmail,
+        role: updates.role ?? prev.role,
+        scopes:
+          updates.permissions && updates.role
+            ? getScopesFromPermissions(updates.permissions, updates.role)
+            : prev.scopes
       }));
     }
+
+    const userPatch: Record<string, unknown> = {};
+    if (updates.name !== undefined) userPatch.name = updates.name;
+    if (updates.email !== undefined) userPatch.email = updates.email;
+    if (updates.status !== undefined) userPatch.status = mapTeamStatusToUserStatus(updates.status);
+    if (Object.keys(userPatch).length > 0) {
+      fetch(`/api/users/${encodeURIComponent(memberId)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': currentUserRole,
+          'x-can-manage-team': String(checkPermission('canManageTeam'))
+        },
+        body: JSON.stringify(userPatch)
+      }).catch(() => {});
+    }
+
     addAuditLog('TEAM_MEMBER_UPDATED', `Updated access permissions / status for user ID ${memberId}.`);
     showBanner('✅ User permissions updated.');
   };
+
+  const userRepository: IUserRepository = useMemo(
+    () =>
+      new TeamMemberUserRepository({
+        getMembers: () => teamMembers,
+        applyMemberUpdate: (id, updates) => {
+          if (!checkPermission('canManageTeam')) {
+            throw new Error(`Access Denied: Role "${currentUserRole}" cannot modify user accounts.`);
+          }
+          setTeamMembers(prev =>
+            prev.map(m => (m.id === id ? { ...m, ...updates } : m))
+          );
+          if (id === activeUserId) {
+            setSession(prev => ({
+              ...prev,
+              userName: updates.name ?? prev.userName,
+              userEmail: updates.email ?? prev.userEmail
+            }));
+          }
+        },
+        onRemoteSync: (id, patch) => {
+          if (Object.keys(patch).length > 0) {
+            fetch(`/api/users/${encodeURIComponent(id)}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-user-role': currentUserRole,
+                'x-can-manage-team': String(checkPermission('canManageTeam'))
+              },
+              body: JSON.stringify(patch)
+            }).catch(() => {});
+          }
+        }
+      }),
+    [teamMembers, currentUserRole, activeUserId]
+  );
 
   // Submission Approval Queue Handlers
   const handleCreateSubmissionRequest = (
@@ -2228,6 +2290,7 @@ export default function App() {
               onCreateEntity={handleCreateEntity}
               onUpdateEntityProfile={handleUpdateEntityProfile}
               onToggleArchiveEntity={handleToggleArchiveEntity}
+              userRepository={userRepository}
               teamMembers={teamMembers}
               activeUserId={activeUser?.id || teamMembers[0].id}
               onSwitchActiveUser={handleSwitchActiveUser}
